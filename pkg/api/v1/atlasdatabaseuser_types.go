@@ -81,7 +81,7 @@ type AtlasDatabaseUserSpec struct {
 	// In case of AWS IAM: the value should be AWS ARN for the IAM User/Role;
 	// In case of OIDC: the value should be the Identity Provider ID;
 	// In case of Plain text auth: the value can be anything
-	// +kubebuilder:validation:MaxLenght:=1024
+	// +kubebuilder:validation:MaxLength:=1024
 	Username string `json:"username"`
 
 	// Human-readable label that indicates whether the new database Username

@@ -172,6 +172,7 @@ spec:
                   In case of AWS IAM: the value should be AWS ARN for the IAM User/Role;
                   In case of OIDC: the value should be the Identity Provider ID; In
                   case of Plain text auth: the value can be anything'
+                maxLength: 1024
                 type: string
               x509Type:
                 description: X509Type is X.509 method by which the database authenticates
