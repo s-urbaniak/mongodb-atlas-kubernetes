@@ -89,7 +89,7 @@ type AtlasDatabaseUserSpec struct {
 	// To create a federated authentication user, specify the value
 	//of IDP_GROUP for this field
 	// +kubebuilder:default:=NONE
-	// +kubebuilder:validation:enum:=NONE,IDP_GROUP
+	// +kubebuilder:validation:Enum:=NONE;IDP_GROUP
 	// +optional
 	OIDCAuthType string `json:"oidcAuthType,omitempty"`
 
@@ -98,7 +98,7 @@ type AtlasDatabaseUserSpec struct {
 	// Identity and Access Management (IAM) credentials associated with
 	// the user or the user's role
 	// +kubebuilder:default:=NONE
-	// +kubebuilder:validation:enum:=NONE,IDP_GROUP
+	// +kubebuilder:validation:Enum:=NONE;USER;ROLE
 	// +optional
 	AWSIAMType string `json:"awsIamType,omitempty"`
 
