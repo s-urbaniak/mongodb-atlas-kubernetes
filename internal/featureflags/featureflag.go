@@ -8,11 +8,13 @@ import (
 const (
 	featurePrefix    = "FEATURE_"
 	featureSeparator = "="
-	FEATURE_OIDC     = "FEATURE_PREVIEW_OIDC_DB_ACCESS"
+	//nolint:stylecheck
+	FeatureOIDC = "FEATURE_PREVIEW_OIDC_DB_ACCESS"
 )
 
 var (
-	ErrOIDCNotEnabled = fmt.Errorf("The 'OIDCAuthType' field is set but the %s flag is missing", FEATURE_OIDC)
+	//nolint:stylecheck
+	ErrOIDCNotEnabled = fmt.Errorf("The 'OIDCAuthType' field is set but the %s flag is missing", FeatureOIDC)
 )
 
 type FeatureFlags struct {
@@ -21,7 +23,7 @@ type FeatureFlags struct {
 
 type EnvLister func() []string
 
-// Creates a new instance of FeatureFlags and reads feature flags from the ENV
+// NewFeatureFlags creates a new instance of FeatureFlags and reads feature flags from the ENV
 func NewFeatureFlags(envVarsLister EnvLister) *FeatureFlags {
 	instance := &FeatureFlags{}
 	envs := envVarsLister()
@@ -39,7 +41,6 @@ func NewFeatureFlags(envVarsLister EnvLister) *FeatureFlags {
 	return instance
 }
 
-// Verifies if a certain feature is present
 func (f *FeatureFlags) IsFeaturePresent(featureName string) bool {
 	_, ok := f.features[featureName]
 	return ok

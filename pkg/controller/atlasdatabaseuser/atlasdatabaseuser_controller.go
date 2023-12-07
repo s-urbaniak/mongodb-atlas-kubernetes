@@ -209,9 +209,7 @@ func (r *AtlasDatabaseUserReconciler) handleFeatureFlags(dbuser *mdbv1.AtlasData
 		return nil
 	}
 
-	var err error
-
-	err = handleOIDCPreview(r.FeatureFlags, dbuser)
+	err := handleOIDCPreview(r.FeatureFlags, dbuser)
 	if err != nil {
 		return err
 	}
@@ -225,7 +223,7 @@ func handleOIDCPreview(featureFlags *featureflags.FeatureFlags, dbuser *mdbv1.At
 		return nil
 	}
 
-	if !featureFlags.IsFeaturePresent(featureflags.FEATURE_OIDC) && dbuser.Spec.OIDCAuthType != "" {
+	if !featureFlags.IsFeaturePresent(featureflags.FeatureOIDC) && dbuser.Spec.OIDCAuthType != "" {
 		return featureflags.ErrOIDCNotEnabled
 	}
 

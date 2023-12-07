@@ -7,7 +7,6 @@ import (
 )
 
 func Test_FeatureFlags(t *testing.T) {
-
 	t.Run("Should parse feature without a value", func(t *testing.T) {
 		f := NewFeatureFlags(func() []string {
 			return []string{"FEATURE_TEST"}
