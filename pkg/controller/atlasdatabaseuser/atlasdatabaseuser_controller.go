@@ -32,15 +32,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	mdbv1 "github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1"
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1/status"
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/atlas"
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/connectionsecret"
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/customresource"
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/statushandler"
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/validate"
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/watch"
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/workflow"
+	"github.com/mongodb/mongodb-atlas-kubernetes/internal/featureflags"
+	mdbv1 "github.com/mongodb/mongodb-atlas-kubernetes/pkg/api/v1"
+	"github.com/mongodb/mongodb-atlas-kubernetes/pkg/api/v1/status"
+	"github.com/mongodb/mongodb-atlas-kubernetes/pkg/controller/atlas"
+	"github.com/mongodb/mongodb-atlas-kubernetes/pkg/controller/connectionsecret"
+	"github.com/mongodb/mongodb-atlas-kubernetes/pkg/controller/customresource"
+	"github.com/mongodb/mongodb-atlas-kubernetes/pkg/controller/statushandler"
+	"github.com/mongodb/mongodb-atlas-kubernetes/pkg/controller/validate"
+	"github.com/mongodb/mongodb-atlas-kubernetes/pkg/controller/watch"
+	"github.com/mongodb/mongodb-atlas-kubernetes/pkg/controller/workflow"
 )
 
 // AtlasDatabaseUserReconciler reconciles an AtlasDatabaseUser object
@@ -55,6 +56,7 @@ type AtlasDatabaseUserReconciler struct {
 	GlobalPredicates            []predicate.Predicate
 	ObjectDeletionProtection    bool
 	SubObjectDeletionProtection bool
+	FeatureFlags                *featureflags.FeatureFlags
 }
 
 // +kubebuilder:rbac:groups=atlas.mongodb.com,resources=atlasdatabaseusers,verbs=get;list;watch;create;update;patch;delete
@@ -172,6 +174,13 @@ func (r *AtlasDatabaseUserReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return result.ReconcileResult(), nil
 	}
 
+	err = r.handleFeatureFlags(databaseUser)
+	if err != nil {
+		result = workflow.Terminate(workflow.Internal, err.Error())
+		log.Error(result.GetMessage())
+		return result.ReconcileResult(), nil
+	}
+
 	result = r.ensureDatabaseUser(workflowCtx, *project, *databaseUser)
 	if !result.IsOk() {
 		workflowCtx.SetConditionFromResult(status.DatabaseUserReadyType, result)
@@ -192,6 +201,34 @@ func (r *AtlasDatabaseUserReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	workflowCtx.SetConditionTrue(status.ReadyType)
 
 	return result.ReconcileResult(), nil
+}
+
+func (r *AtlasDatabaseUserReconciler) handleFeatureFlags(dbuser *mdbv1.AtlasDatabaseUser) error {
+	if r.FeatureFlags == nil {
+		return nil
+	}
+
+	var err error
+
+	err = handleOIDCPreview(r.FeatureFlags, dbuser)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// TODO: Remove after the OIDC feature becomes stable
+func handleOIDCPreview(featureFlags *featureflags.FeatureFlags, dbuser *mdbv1.AtlasDatabaseUser) error {
+	if dbuser == nil {
+		return nil
+	}
+
+	if !featureFlags.IsFeaturePresent(featureflags.FEATURE_OIDC) && dbuser.Spec.OIDCAuthType != "" {
+		return featureflags.ErrOIDCNotEnabled
+	}
+
+	return nil
 }
 
 func (r *AtlasDatabaseUserReconciler) readProjectResource(user *mdbv1.AtlasDatabaseUser, project *mdbv1.AtlasProject) workflow.Result {

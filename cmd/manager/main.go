@@ -42,17 +42,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	mdbv1 "github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1"
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/atlas"
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/atlasdatabaseuser"
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/atlasdatafederation"
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/atlasdeployment"
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/atlasfederatedauth"
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/atlasproject"
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/connectionsecret"
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/watch"
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/util/kube"
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/version"
+	"github.com/mongodb/mongodb-atlas-kubernetes/internal/featureflags"
+	mdbv1 "github.com/mongodb/mongodb-atlas-kubernetes/pkg/api/v1"
+	"github.com/mongodb/mongodb-atlas-kubernetes/pkg/controller/atlasdatabaseuser"
+	"github.com/mongodb/mongodb-atlas-kubernetes/pkg/controller/atlasdatafederation"
+	"github.com/mongodb/mongodb-atlas-kubernetes/pkg/controller/atlasdeployment"
+	"github.com/mongodb/mongodb-atlas-kubernetes/pkg/controller/atlasfederatedauth"
+	"github.com/mongodb/mongodb-atlas-kubernetes/pkg/controller/atlasproject"
+	"github.com/mongodb/mongodb-atlas-kubernetes/pkg/controller/connectionsecret"
+	"github.com/mongodb/mongodb-atlas-kubernetes/pkg/controller/watch"
+	"github.com/mongodb/mongodb-atlas-kubernetes/pkg/util/kube"
+	"github.com/mongodb/mongodb-atlas-kubernetes/pkg/version"
 )
 
 const (
@@ -62,6 +62,7 @@ const (
 	subobjectDeletionProtectionEnvVar  = "SUBOBJECT_DELETION_PROTECTION"
 	objectDeletionProtectionDefault    = true
 	subobjectDeletionProtectionDefault = true
+	featurePreviewFlagOIDC             = "FEATURE_PREVIEW_OIDC_DB_ACCESS"
 )
 
 var (
@@ -180,6 +181,7 @@ func main() {
 		GlobalPredicates:            globalPredicates,
 		ObjectDeletionProtection:    config.ObjectDeletionProtection,
 		SubObjectDeletionProtection: config.SubObjectDeletionProtection,
+		FeatureFlags:                config.FeatureFlags,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AtlasDatabaseUser")
 		os.Exit(1)
@@ -246,6 +248,7 @@ type Config struct {
 	LogEncoder                  string
 	ObjectDeletionProtection    bool
 	SubObjectDeletionProtection bool
+	FeatureFlags                *featureflags.FeatureFlags
 }
 
 // ParseConfiguration fills the 'OperatorConfig' from the flags passed to the program
@@ -291,6 +294,7 @@ func parseConfiguration() Config {
 
 	configureDeletionProtection(&config)
 
+	config.FeatureFlags = featureflags.NewFeatureFlags(os.Environ)
 	return config
 }
 
