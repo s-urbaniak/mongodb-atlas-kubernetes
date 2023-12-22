@@ -64,7 +64,6 @@ const (
 	subobjectDeletionProtectionEnvVar  = "SUBOBJECT_DELETION_PROTECTION"
 	objectDeletionProtectionDefault    = true
 	subobjectDeletionProtectionDefault = true
-	featurePreviewFlagOIDC             = "FEATURE_PREVIEW_OIDC_DB_ACCESS"
 )
 
 var (
@@ -183,7 +182,7 @@ func main() {
 		GlobalPredicates:              globalPredicates,
 		ObjectDeletionProtection:      config.ObjectDeletionProtection,
 		SubObjectDeletionProtection:   config.SubObjectDeletionProtection,
-		FeaturePreviewOIDCAuthEnabled: config.FeatureFlags.IsFeaturePresent(atlasdatabaseuser.FeatureOIDC),
+		FeaturePreviewOIDCAuthEnabled: config.FeatureFlags.IsFeaturePresent(featureflags.FeatureOIDC),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AtlasDatabaseUser")
 		os.Exit(1)
