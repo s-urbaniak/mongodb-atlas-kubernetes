@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/featureflags"
 	mdbv1 "github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1"
 
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1/status"
@@ -45,9 +46,7 @@ import (
 )
 
 //nolint:stylecheck
-const FeatureOIDC = "FEATURE_PREVIEW_OIDC_DB_ACCESS"
-
-var ErrOIDCNotEnabled = fmt.Errorf("the 'OIDCAuthType' field is set but the %s flag is missing", FeatureOIDC)
+var ErrOIDCNotEnabled = fmt.Errorf("the 'OIDCAuthType' field is set but the %s flag is missing", featureflags.FeatureOIDC)
 
 // AtlasDatabaseUserReconciler reconciles an AtlasDatabaseUser object
 type AtlasDatabaseUserReconciler struct {
