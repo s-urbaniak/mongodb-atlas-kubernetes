@@ -173,17 +173,17 @@ func main() {
 	}
 
 	if err = (&atlasdatabaseuser.AtlasDatabaseUserReconciler{
-		ResourceWatcher:             watch.NewResourceWatcher(),
-		Client:                      mgr.GetClient(),
-		Log:                         logger.Named("controllers").Named("AtlasDatabaseUser").Sugar(),
-		Scheme:                      mgr.GetScheme(),
-		AtlasDomain:                 config.AtlasDomain,
-		GlobalAPISecret:             config.GlobalAPISecret,
-		EventRecorder:               mgr.GetEventRecorderFor("AtlasDatabaseUser"),
-		GlobalPredicates:            globalPredicates,
-		ObjectDeletionProtection:    config.ObjectDeletionProtection,
-		SubObjectDeletionProtection: config.SubObjectDeletionProtection,
-		FeatureFlags:                config.FeatureFlags,
+		ResourceWatcher:               watch.NewResourceWatcher(),
+		Client:                        mgr.GetClient(),
+		Log:                           logger.Named("controllers").Named("AtlasDatabaseUser").Sugar(),
+		Scheme:                        mgr.GetScheme(),
+		AtlasDomain:                   config.AtlasDomain,
+		GlobalAPISecret:               config.GlobalAPISecret,
+		EventRecorder:                 mgr.GetEventRecorderFor("AtlasDatabaseUser"),
+		GlobalPredicates:              globalPredicates,
+		ObjectDeletionProtection:      config.ObjectDeletionProtection,
+		SubObjectDeletionProtection:   config.SubObjectDeletionProtection,
+		FeaturePreviewOIDCAuthEnabled: config.FeatureFlags.IsFeaturePresent(atlasdatabaseuser.FeatureOIDC),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AtlasDatabaseUser")
 		os.Exit(1)

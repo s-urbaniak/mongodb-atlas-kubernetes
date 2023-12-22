@@ -87,7 +87,7 @@ type AtlasDatabaseUserSpec struct {
 	// Human-readable label that indicates whether the new database Username
 	// with OIDC federated authentication.
 	// To create a federated authentication user, specify the value
-	//of IDP_GROUP for this field
+	// of IDP_GROUP for this field
 	// +kubebuilder:default:=NONE
 	// +kubebuilder:validation:Enum:=NONE;IDP_GROUP
 	// +optional

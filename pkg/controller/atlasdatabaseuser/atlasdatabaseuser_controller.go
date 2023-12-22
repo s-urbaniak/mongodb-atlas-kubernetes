@@ -34,7 +34,6 @@ import (
 
 	mdbv1 "github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1"
 
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/featureflags"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1/status"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/atlas"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/connectionsecret"
@@ -45,19 +44,23 @@ import (
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/workflow"
 )
 
+const FeatureOIDC = "FEATURE_PREVIEW_OIDC_DB_ACCESS"
+
+var ErrOIDCNotEnabled = fmt.Errorf("The 'OIDCAuthType' field is set but the %s flag is missing", FeatureOIDC)
+
 // AtlasDatabaseUserReconciler reconciles an AtlasDatabaseUser object
 type AtlasDatabaseUserReconciler struct {
 	watch.ResourceWatcher
-	Client                      client.Client
-	Log                         *zap.SugaredLogger
-	Scheme                      *runtime.Scheme
-	AtlasDomain                 string
-	GlobalAPISecret             client.ObjectKey
-	EventRecorder               record.EventRecorder
-	GlobalPredicates            []predicate.Predicate
-	ObjectDeletionProtection    bool
-	SubObjectDeletionProtection bool
-	FeatureFlags                *featureflags.FeatureFlags
+	Client                        client.Client
+	Log                           *zap.SugaredLogger
+	Scheme                        *runtime.Scheme
+	AtlasDomain                   string
+	GlobalAPISecret               client.ObjectKey
+	EventRecorder                 record.EventRecorder
+	GlobalPredicates              []predicate.Predicate
+	ObjectDeletionProtection      bool
+	SubObjectDeletionProtection   bool
+	FeaturePreviewOIDCAuthEnabled bool
 }
 
 // +kubebuilder:rbac:groups=atlas.mongodb.com,resources=atlasdatabaseusers,verbs=get;list;watch;create;update;patch;delete
@@ -205,11 +208,7 @@ func (r *AtlasDatabaseUserReconciler) Reconcile(ctx context.Context, req ctrl.Re
 }
 
 func (r *AtlasDatabaseUserReconciler) handleFeatureFlags(dbuser *mdbv1.AtlasDatabaseUser) error {
-	if r.FeatureFlags == nil {
-		return nil
-	}
-
-	err := handleOIDCPreview(r.FeatureFlags, dbuser)
+	err := handleOIDCPreview(r.FeaturePreviewOIDCAuthEnabled, dbuser)
 	if err != nil {
 		return err
 	}
@@ -218,13 +217,13 @@ func (r *AtlasDatabaseUserReconciler) handleFeatureFlags(dbuser *mdbv1.AtlasData
 }
 
 // TODO: Remove after the OIDC feature becomes stable
-func handleOIDCPreview(featureFlags *featureflags.FeatureFlags, dbuser *mdbv1.AtlasDatabaseUser) error {
+func handleOIDCPreview(OIDCEnabled bool, dbuser *mdbv1.AtlasDatabaseUser) error {
 	if dbuser == nil {
 		return nil
 	}
 
-	if !featureFlags.IsFeaturePresent(featureflags.FeatureOIDC) && dbuser.Spec.OIDCAuthType != "" {
-		return featureflags.ErrOIDCNotEnabled
+	if !OIDCEnabled && dbuser.Spec.OIDCAuthType != "" {
+		return ErrOIDCNotEnabled
 	}
 
 	return nil

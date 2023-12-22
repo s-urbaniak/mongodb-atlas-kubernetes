@@ -1,20 +1,12 @@
 package featureflags
 
 import (
-	"fmt"
 	"strings"
 )
 
 const (
 	featurePrefix    = "FEATURE_"
 	featureSeparator = "="
-	//nolint:stylecheck
-	FeatureOIDC = "FEATURE_PREVIEW_OIDC_DB_ACCESS"
-)
-
-var (
-	//nolint:stylecheck
-	ErrOIDCNotEnabled = fmt.Errorf("The 'OIDCAuthType' field is set but the %s flag is missing", FeatureOIDC)
 )
 
 type FeatureFlags struct {
