@@ -44,9 +44,10 @@ import (
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/workflow"
 )
 
+//nolint:stylecheck
 const FeatureOIDC = "FEATURE_PREVIEW_OIDC_DB_ACCESS"
 
-var ErrOIDCNotEnabled = fmt.Errorf("The 'OIDCAuthType' field is set but the %s flag is missing", FeatureOIDC)
+var ErrOIDCNotEnabled = fmt.Errorf("the 'OIDCAuthType' field is set but the %s flag is missing", FeatureOIDC)
 
 // AtlasDatabaseUserReconciler reconciles an AtlasDatabaseUser object
 type AtlasDatabaseUserReconciler struct {
