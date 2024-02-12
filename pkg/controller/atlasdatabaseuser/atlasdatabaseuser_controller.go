@@ -133,26 +133,6 @@ func (r *AtlasDatabaseUserReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	workflowCtx.OrgID = orgID
 	workflowCtx.Client = atlasClient
 
-	owner, err := customresource.IsOwner(databaseUser, r.ObjectDeletionProtection, customresource.IsResourceManagedByOperator, managedByAtlas(ctx, atlasClient, project.ID(), log))
-	if err != nil {
-		result = workflow.Terminate(workflow.Internal, fmt.Sprintf("enable to resolve ownership for deletion protection: %s", err))
-		workflowCtx.SetConditionFromResult(status.DatabaseUserReadyType, result)
-		log.Error(result.GetMessage())
-
-		return result.ReconcileResult(), nil
-	}
-
-	if !owner {
-		result = workflow.Terminate(
-			workflow.AtlasDeletionProtection,
-			"unable to reconcile database user: it already exists in Atlas, it was not previously managed by the operator, and the deletion protection is enabled.",
-		)
-		workflowCtx.SetConditionFromResult(status.DatabaseUserReadyType, result)
-		log.Error(result.GetMessage())
-
-		return result.ReconcileResult(), nil
-	}
-
 	deletionRequest, result := r.handleDeletion(ctx, databaseUser, project, atlasClient, log)
 	if deletionRequest {
 		return result.ReconcileResult(), nil
@@ -279,30 +259,4 @@ func (r *AtlasDatabaseUserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&mdbv1.AtlasDatabaseUser{}, builder.WithPredicates(r.GlobalPredicates...)).
 		Watches(&corev1.Secret{}, watch.NewSecretHandler(r.WatchedResources)).
 		Complete(r)
-}
-
-func managedByAtlas(ctx context.Context, atlasClient *mongodbatlas.Client, projectID string, log *zap.SugaredLogger) customresource.AtlasChecker {
-	return func(resource mdbv1.AtlasCustomResource) (bool, error) {
-		dbUser, ok := resource.(*mdbv1.AtlasDatabaseUser)
-		if !ok {
-			return false, errors.New("failed to match resource type as AtlasDatabaseUser")
-		}
-
-		atlasDBUser, _, err := atlasClient.DatabaseUsers.Get(ctx, dbUser.Spec.DatabaseName, projectID, dbUser.Spec.Username)
-		if err != nil {
-			var apiError *mongodbatlas.ErrorResponse
-			if errors.As(err, &apiError) && apiError.ErrorCode == atlas.UsernameNotFound {
-				return false, nil
-			}
-
-			return false, err
-		}
-
-		isSame, err := userMatchesSpec(log, atlasDBUser, dbUser.Spec)
-		if err != nil {
-			return true, err
-		}
-
-		return !isSame, nil
-	}
 }
