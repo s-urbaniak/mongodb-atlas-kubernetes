@@ -1,19 +1,18 @@
 package atlasproject
 
 import (
+	"go.mongodb.org/atlas/mongodbatlas"
+	"k8s.io/apimachinery/pkg/types"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 
-	v1 "github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1"
-
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/kube"
+	v1 "github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1/common"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1/status"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/customresource"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/statushandler"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/watch"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/workflow"
-	"go.mongodb.org/atlas/mongodbatlas"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 type TeamDataContainer struct {

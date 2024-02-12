@@ -3,8 +3,9 @@ package atlasproject
 import (
 	"testing"
 
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1/project"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1/project"
 )
 
 func TestValidateMaintenanceWindow(t *testing.T) {

@@ -3,9 +3,10 @@ package atlasproject
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	mdbv1 "github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1/provider"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestGetEndpointsNotInAtlas(t *testing.T) {
