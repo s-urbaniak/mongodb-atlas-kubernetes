@@ -5,26 +5,22 @@ import (
 	"errors"
 	"fmt"
 
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
-	"sigs.k8s.io/controller-runtime/pkg/event"
-
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/connectionsecret"
-
 	"go.mongodb.org/atlas/mongodbatlas"
-
-	ctrl "sigs.k8s.io/controller-runtime"
-
 	"go.uber.org/zap"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/kube"
 	mdbv1 "github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1/status"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/atlas"
+	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/connectionsecret"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/customresource"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/statushandler"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/watch"
@@ -103,26 +99,6 @@ func (r *AtlasDataFederationReconciler) Reconcile(context context.Context, req c
 	}
 	ctx.OrgID = orgID
 	ctx.Client = atlasClient
-
-	owner, err := customresource.IsOwner(dataFederation, r.ObjectDeletionProtection, customresource.IsResourceManagedByOperator, managedByAtlas(context, atlasClient, project.ID(), log))
-	if err != nil {
-		result = workflow.Terminate(workflow.Internal, fmt.Sprintf("unable to resolve ownership for deletion protection: %s", err))
-		ctx.SetConditionFromResult(status.DataFederationReadyType, result)
-		log.Error(result.GetMessage())
-
-		return result.ReconcileResult(), nil
-	}
-
-	if !owner {
-		result = workflow.Terminate(
-			workflow.AtlasDeletionProtection,
-			"unable to reconcile DataFederation: it already exists in Atlas, it was not previously managed by the operator, and the deletion protection is enabled.",
-		)
-		ctx.SetConditionFromResult(status.DataFederationReadyType, result)
-		log.Error(result.GetMessage())
-
-		return result.ReconcileResult(), nil
-	}
 
 	if result = r.ensureDataFederation(ctx, project, dataFederation); !result.IsOk() {
 		ctx.SetConditionFromResult(status.DataFederationReadyType, result)
@@ -259,28 +235,4 @@ func (r *AtlasDataFederationReconciler) Delete(ctx context.Context, e event.Dele
 	}
 
 	return nil
-}
-
-func managedByAtlas(ctx context.Context, atlasClient *mongodbatlas.Client, projectID string, log *zap.SugaredLogger) customresource.AtlasChecker {
-	return func(resource mdbv1.AtlasCustomResource) (bool, error) {
-		dataFederation, ok := resource.(*mdbv1.AtlasDataFederation)
-		if !ok {
-			return false, errors.New("failed to match resource type as AtlasDataFederation")
-		}
-
-		atlasDataFederation, _, err := atlasClient.DataFederation.Get(ctx, projectID, dataFederation.Spec.Name)
-		if err != nil {
-			var apiError *mongodbatlas.ErrorResponse
-			if errors.As(err, &apiError) && (apiError.ErrorCode == atlas.DataFederationTenantNotFound || apiError.ErrorCode == atlas.ResourceNotFound) {
-				return false, nil
-			}
-			return false, err
-		}
-
-		isSame, err := dataFederationMatchesSpec(log, atlasDataFederation, dataFederation)
-		if err != nil {
-			return true, nil
-		}
-		return !isSame, nil
-	}
 }
