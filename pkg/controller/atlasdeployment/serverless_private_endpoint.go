@@ -2,10 +2,7 @@ package atlasdeployment
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"sort"
-
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/stringutil"
 
 	"go.uber.org/zap"
@@ -16,7 +13,6 @@ import (
 
 	mdbv1 "github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1/provider"
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/customresource"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/workflow"
 )
 
@@ -36,24 +32,6 @@ func ensureServerlessPrivateEndpoints(service *workflow.Context, groupID string,
 		return workflow.Terminate(workflow.ServerlessPrivateEndpointReady, "deployment spec is empty")
 	}
 	deploymentSpec := deployment.Spec.ServerlessSpec
-
-	canReconcile, err := canServerlessPrivateEndpointsReconcile(service, protected, groupID, deployment)
-	if err != nil {
-		result := workflow.Terminate(workflow.Internal, fmt.Sprintf("unable to resolve ownership for deletion protection: %s", err))
-		service.SetConditionFromResult(status.AlertConfigurationReadyType, result)
-
-		return result
-	}
-
-	if !canReconcile {
-		result := workflow.Terminate(
-			workflow.AtlasDeletionProtection,
-			"unable to reconcile Serverless Private Endpoints due to deletion protection being enabled. see https://dochub.mongodb.org/core/ako-deletion-protection for further information",
-		)
-		service.SetConditionFromResult(status.AlertConfigurationReadyType, result)
-
-		return result
-	}
 
 	providerName := GetServerlessProvider(deploymentSpec)
 	if providerName == provider.ProviderGCP {
@@ -78,82 +56,6 @@ func ensureServerlessPrivateEndpoints(service *workflow.Context, groupID string,
 
 	service.SetConditionTrue(status.ServerlessPrivateEndpointReadyType)
 	return result
-}
-
-func canServerlessPrivateEndpointsReconcile(service *workflow.Context, protected bool, groupID string, deployment *mdbv1.AtlasDeployment) (bool, error) {
-	if !protected {
-		return true, nil
-	}
-
-	latestConfig := &mdbv1.AtlasDeploymentSpec{}
-	latestConfigString, ok := deployment.Annotations[customresource.AnnotationLastAppliedConfiguration]
-	if ok {
-		if err := json.Unmarshal([]byte(latestConfigString), latestConfig); err != nil {
-			return false, err
-		}
-	}
-
-	atlasClient := service.Client
-	existingPE, err := getAllExistingServerlessPE(service.Context, atlasClient.ServerlessPrivateEndpoints, groupID, deployment.Spec.ServerlessSpec.Name)
-	if err != nil {
-		return false, err
-	}
-
-	if len(existingPE) == 0 {
-		return true, nil
-	}
-
-	logger := service.Log
-	prevCfg := prevPEConfig(latestConfig)
-	if matchingPEs(logger, deployment.Spec.ServerlessSpec.PrivateEndpoints, existingPE) ||
-		matchingPEs(logger, prevCfg, existingPE) {
-		return true, nil
-	}
-	return false, nil
-}
-
-func sortedK8sPENames(spes []mdbv1.ServerlessPrivateEndpoint) []string {
-	names := make([]string, 0, len(spes))
-	for _, spe := range spes {
-		names = append(names, spe.Name)
-	}
-	sort.Strings(names)
-	return names
-}
-
-func sortedAtlasPENames(atlasPEs []mongodbatlas.ServerlessPrivateEndpointConnection) []string {
-	names := make([]string, 0, len(atlasPEs))
-	for _, atlasPE := range atlasPEs {
-		names = append(names, atlasPE.Comment)
-	}
-	sort.Strings(names)
-	return names
-}
-
-func matchingPEs(logger *zap.SugaredLogger, spes []mdbv1.ServerlessPrivateEndpoint, atlasPEs []mongodbatlas.ServerlessPrivateEndpointConnection) bool {
-	k8sPENames := sortedK8sPENames(spes)
-	atlasPENames := sortedAtlasPENames(atlasPEs)
-	if len(k8sPENames) != len(atlasPEs) {
-		logger.Debugf("Kubernetes PEs do not match Atlas: k8s %v != Atlas %v", k8sPENames, atlasPENames)
-		logger.Debugf("Different PE sets lengths Kubernetes wants %d but atlas has %d", len(k8sPENames), len(atlasPEs))
-		return false
-	}
-	for i, k8sName := range k8sPENames {
-		if atlasPENames[i] != k8sName {
-			logger.Debugf("Kubernetes PEs do not match Atlas: k8s %v != Atlas %v", k8sPENames, atlasPENames)
-			logger.Debugf("Different PE at index %d %d but atlas has %d", k8sName, atlasPENames[i])
-			return false
-		}
-	}
-	logger.Debugf("Kubernetes PEs MATCH Atlas: k8s %v == Atlas %v", k8sPENames, atlasPENames)
-	return true
-}
-
-func prevPEConfig(deploymentSpec *mdbv1.AtlasDeploymentSpec) []mdbv1.ServerlessPrivateEndpoint {
-	if deploymentSpec.ServerlessSpec == nil || deploymentSpec.ServerlessSpec.PrivateEndpoints == nil {
-		return []mdbv1.ServerlessPrivateEndpoint{}
-	}
-	return deploymentSpec.ServerlessSpec.PrivateEndpoints
 }
 
 func GetServerlessProvider(deploymentSpec *mdbv1.ServerlessSpec) provider.ProviderName {
