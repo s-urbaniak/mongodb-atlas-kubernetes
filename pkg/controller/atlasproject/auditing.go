@@ -1,8 +1,6 @@
 package atlasproject
 
 import (
-	"encoding/json"
-	"fmt"
 	"reflect"
 
 	"go.mongodb.org/atlas/mongodbatlas"
@@ -10,29 +8,10 @@ import (
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/pointer"
 	v1 "github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1/status"
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/customresource"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/workflow"
 )
 
 func ensureAuditing(workflowCtx *workflow.Context, project *v1.AtlasProject, protected bool) workflow.Result {
-	canReconcile, err := canAuditingReconcile(workflowCtx, protected, project)
-	if err != nil {
-		result := workflow.Terminate(workflow.Internal, fmt.Sprintf("unable to resolve ownership for deletion protection: %s", err))
-		workflowCtx.SetConditionFromResult(status.AuditingReadyType, result)
-
-		return result
-	}
-
-	if !canReconcile {
-		result := workflow.Terminate(
-			workflow.AtlasDeletionProtection,
-			"unable to reconcile Auditing due to deletion protection being enabled. see https://dochub.mongodb.org/core/ako-deletion-protection for further information",
-		)
-		workflowCtx.SetConditionFromResult(status.AuditingReadyType, result)
-
-		return result
-	}
-
 	result := createOrDeleteAuditing(workflowCtx, project.ID(), project)
 	if !result.IsOk() {
 		workflowCtx.SetConditionFromResult(status.AuditingReadyType, result)
@@ -116,30 +95,4 @@ func fetchAuditing(ctx *workflow.Context, projectID string) (*mongodbatlas.Audit
 func patchAuditing(ctx *workflow.Context, projectID string, auditing *mongodbatlas.Auditing) error {
 	_, _, err := ctx.Client.Auditing.Configure(ctx.Context, projectID, auditing)
 	return err
-}
-
-func canAuditingReconcile(workflowCtx *workflow.Context, protected bool, akoProject *v1.AtlasProject) (bool, error) {
-	if !protected {
-		return true, nil
-	}
-
-	latestConfig := &v1.AtlasProjectSpec{}
-	latestConfigString, ok := akoProject.Annotations[customresource.AnnotationLastAppliedConfiguration]
-	if ok {
-		if err := json.Unmarshal([]byte(latestConfigString), latestConfig); err != nil {
-			return false, err
-		}
-	}
-
-	auditing, _, err := workflowCtx.Client.Auditing.Get(workflowCtx.Context, akoProject.ID())
-	if err != nil {
-		return false, err
-	}
-
-	if isAuditingEmpty(auditing) {
-		return true, nil
-	}
-
-	return auditingInSync(auditing, latestConfig.Auditing) ||
-		auditingInSync(auditing, akoProject.Spec.Auditing), nil
 }
