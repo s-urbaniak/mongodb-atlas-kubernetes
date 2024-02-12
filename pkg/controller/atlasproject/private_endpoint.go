@@ -2,12 +2,8 @@ package atlasproject
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
-
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/customresource"
 
 	"golang.org/x/exp/slices"
 
@@ -21,24 +17,6 @@ import (
 )
 
 func ensurePrivateEndpoint(workflowCtx *workflow.Context, project *mdbv1.AtlasProject, protected bool) workflow.Result {
-	canReconcile, err := canPrivateEndpointReconcile(workflowCtx.Context, workflowCtx.Client, protected, project)
-	if err != nil {
-		result := workflow.Terminate(workflow.Internal, fmt.Sprintf("unable to resolve ownership for deletion protection: %s", err))
-		workflowCtx.SetConditionFromResult(status.PrivateEndpointReadyType, result)
-
-		return result
-	}
-
-	if !canReconcile {
-		result := workflow.Terminate(
-			workflow.AtlasDeletionProtection,
-			"unable to reconcile Private Endpoint(s) due to deletion protection being enabled. see https://dochub.mongodb.org/core/ako-deletion-protection for further information",
-		)
-		workflowCtx.SetConditionFromResult(status.PrivateEndpointReadyType, result)
-
-		return result
-	}
-
 	specPEs := project.Spec.DeepCopy().PrivateEndpoints
 
 	atlasPEs, err := getAllPrivateEndpoints(workflowCtx.Context, workflowCtx.Client, project.ID())
@@ -548,37 +526,4 @@ func getEndpointsIntersection(specPEs []mdbv1.PrivateEndpoint, atlasPEs []atlasP
 type intersectionPair struct {
 	spec  mdbv1.PrivateEndpoint
 	atlas atlasPE
-}
-
-func canPrivateEndpointReconcile(ctx context.Context, atlasClient *mongodbatlas.Client, protected bool, akoProject *mdbv1.AtlasProject) (bool, error) {
-	if !protected {
-		return true, nil
-	}
-
-	latestConfig := &mdbv1.AtlasProjectSpec{}
-	latestConfigString, ok := akoProject.Annotations[customresource.AnnotationLastAppliedConfiguration]
-	if ok {
-		if err := json.Unmarshal([]byte(latestConfigString), latestConfig); err != nil {
-			return false, err
-		}
-	}
-
-	list, err := getAllPrivateEndpoints(ctx, atlasClient, akoProject.ID())
-	if err != nil {
-		return false, err
-	}
-
-	if len(list) == 0 {
-		return true, nil
-	}
-
-	diff, _ := getUniqueDifference(list, latestConfig.PrivateEndpoints)
-
-	if len(diff) == 0 {
-		return true, nil
-	}
-
-	diff, _ = getUniqueDifference(list, akoProject.Spec.PrivateEndpoints)
-
-	return len(diff) == 0, nil
 }
