@@ -148,26 +148,6 @@ func (r *AtlasProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	workflowCtx.OrgID = orgID
 	workflowCtx.Client = atlasClient
 
-	owner, err := customresource.IsOwner(project, r.ObjectDeletionProtection, customresource.IsResourceManagedByOperator, managedByAtlas(workflowCtx))
-	if err != nil {
-		result = workflow.Terminate(workflow.Internal, fmt.Sprintf("unable to resolve ownership for deletion protection: %s", err))
-		workflowCtx.SetConditionFromResult(status.ProjectReadyType, result)
-		log.Error(result.GetMessage())
-
-		return result.ReconcileResult(), nil
-	}
-
-	if !owner {
-		result = workflow.Terminate(
-			workflow.AtlasDeletionProtection,
-			"unable to reconcile Project due to deletion protection being enabled. see https://dochub.mongodb.org/core/ako-deletion-protection for further information",
-		)
-		workflowCtx.SetConditionFromResult(status.ProjectReadyType, result)
-		log.Error(result.GetMessage())
-
-		return result.ReconcileResult(), nil
-	}
-
 	projectID, result := r.ensureProjectExists(workflowCtx, project)
 	if !result.IsOk() {
 		setCondition(workflowCtx, status.ProjectReadyType, result)
@@ -374,34 +354,5 @@ func setCondition(ctx *workflow.Context, condition status.ConditionType, result 
 func logIfWarning(ctx *workflow.Context, result workflow.Result) {
 	if result.IsWarning() {
 		ctx.Log.Warnw(result.GetMessage())
-	}
-}
-
-func managedByAtlas(workflowCtx *workflow.Context) customresource.AtlasChecker {
-	return func(resource mdbv1.AtlasCustomResource) (bool, error) {
-		project, ok := resource.(*mdbv1.AtlasProject)
-		if !ok {
-			return false, errors.New("failed to match resource type as AtlasProject")
-		}
-
-		if project.ID() == "" {
-			return false, nil
-		}
-
-		atlasProject, _, err := workflowCtx.Client.Projects.GetOneProject(workflowCtx.Context, project.ID())
-		if err != nil {
-			var apiError *mongodbatlas.ErrorResponse
-			if errors.As(err, &apiError) && (apiError.ErrorCode == atlas.NotInGroup || apiError.ErrorCode == atlas.ResourceNotFound) {
-				return false, nil
-			}
-
-			return false, err
-		}
-
-		if project.Spec.Name == atlasProject.Name {
-			return false, err
-		}
-
-		return true, nil
 	}
 }
