@@ -2,7 +2,6 @@ package atlasproject
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -16,7 +15,6 @@ import (
 	mdbv1 "github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1/common"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1/status"
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/customresource"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/watch"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/workflow"
 )
@@ -29,24 +27,6 @@ func (r *AtlasProjectReconciler) ensureEncryptionAtRest(workflowCtx *workflow.Co
 	if err := readEncryptionAtRestSecrets(r.Client, workflowCtx, project.Spec.EncryptionAtRest, project.Namespace); err != nil {
 		workflowCtx.UnsetCondition(status.EncryptionAtRestReadyType)
 		return workflow.Terminate(workflow.ProjectEncryptionAtRestReady, err.Error())
-	}
-
-	canReconcile, err := canEncryptionAtRestReconcile(workflowCtx, protected, project)
-	if err != nil {
-		result := workflow.Terminate(workflow.Internal, fmt.Sprintf("unable to resolve ownership for deletion protection: %s", err))
-		workflowCtx.SetConditionFromResult(status.EncryptionAtRestReadyType, result)
-
-		return result
-	}
-
-	if !canReconcile {
-		result := workflow.Terminate(
-			workflow.AtlasDeletionProtection,
-			"unable to reconcile Encryption At Rest due to deletion protection being enabled. see https://dochub.mongodb.org/core/ako-deletion-protection for further information",
-		)
-		workflowCtx.SetConditionFromResult(status.EncryptionAtRestReadyType, result)
-
-		return result
 	}
 
 	result := createOrDeleteEncryptionAtRests(workflowCtx, project.ID(), project)
@@ -386,38 +366,6 @@ func selectRole(accessRoles []status.CloudProviderIntegration, providerName stri
 	}
 
 	return
-}
-
-func canEncryptionAtRestReconcile(workflowCtx *workflow.Context, protected bool, akoProject *mdbv1.AtlasProject) (bool, error) {
-	if !protected {
-		return true, nil
-	}
-
-	latestConfig := &mdbv1.AtlasProjectSpec{}
-	latestConfigString, ok := akoProject.Annotations[customresource.AnnotationLastAppliedConfiguration]
-	if ok {
-		if err := json.Unmarshal([]byte(latestConfigString), latestConfig); err != nil {
-			return false, err
-		}
-	}
-
-	ear, _, err := workflowCtx.Client.EncryptionsAtRest.Get(workflowCtx.Context, akoProject.ID())
-	if err != nil {
-		return false, err
-	}
-
-	if IsEncryptionAtlasEmpty(ear) {
-		return true, nil
-	}
-
-	return areEaRConfigEqual(*latestConfig.EncryptionAtRest, ear, true) ||
-		areEaRConfigEqual(*akoProject.Spec.EncryptionAtRest, ear, false), nil
-}
-
-func areEaRConfigEqual(operator mdbv1.EncryptionAtRest, atlas *mongodbatlas.EncryptionAtRest, lastApplied bool) bool {
-	return areAWSConfigEqual(operator.AwsKms, atlas.AwsKms, lastApplied) &&
-		areGCPConfigEqual(operator.GoogleCloudKms, atlas.GoogleCloudKms, lastApplied) &&
-		areAzureConfigEqual(operator.AzureKeyVault, atlas.AzureKeyVault, lastApplied)
 }
 
 func areAWSConfigEqual(operator mdbv1.AwsKms, atlas mongodbatlas.AwsKms, lastApplied bool) bool {
