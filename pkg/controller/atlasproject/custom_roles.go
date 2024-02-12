@@ -1,7 +1,6 @@
 package atlasproject
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -12,29 +11,10 @@ import (
 	"go.mongodb.org/atlas/mongodbatlas"
 
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1/status"
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/customresource"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/workflow"
 )
 
 func ensureCustomRoles(workflowCtx *workflow.Context, project *v1.AtlasProject, protected bool) workflow.Result {
-	canReconcile, err := canCustomRolesReconcile(workflowCtx, protected, project)
-	if err != nil {
-		result := workflow.Terminate(workflow.Internal, fmt.Sprintf("unable to resolve ownership for deletion protection: %s", err))
-		workflowCtx.SetConditionFromResult(status.ProjectCustomRolesReadyType, result)
-
-		return result
-	}
-
-	if !canReconcile {
-		result := workflow.Terminate(
-			workflow.AtlasDeletionProtection,
-			"unable to reconcile Custom Roles due to deletion protection being enabled. see https://dochub.mongodb.org/core/ako-deletion-protection for further information",
-		)
-		workflowCtx.SetConditionFromResult(status.ProjectCustomRolesReadyType, result)
-
-		return result
-	}
-
 	currentCustomRoles, err := fetchCustomRoles(workflowCtx, project.ID())
 	if err != nil {
 		return workflow.Terminate(workflow.ProjectCustomRolesReady, err.Error())
@@ -302,35 +282,4 @@ func syncCustomRolesStatus(ctx *workflow.Context, desiredCustomRoles []v1.Custom
 	}
 
 	return workflow.OK()
-}
-
-func canCustomRolesReconcile(workflowCtx *workflow.Context, protected bool, akoProject *v1.AtlasProject) (bool, error) {
-	if !protected {
-		return true, nil
-	}
-
-	latestConfig := &v1.AtlasProjectSpec{}
-	latestConfigString, ok := akoProject.Annotations[customresource.AnnotationLastAppliedConfiguration]
-	if ok {
-		if err := json.Unmarshal([]byte(latestConfigString), latestConfig); err != nil {
-			return false, err
-		}
-	}
-
-	atlasData, _, err := workflowCtx.Client.CustomDBRoles.List(workflowCtx.Context, akoProject.ID(), nil)
-	if err != nil {
-		return false, err
-	}
-
-	if atlasData == nil || len(*atlasData) == 0 {
-		return true, nil
-	}
-
-	atlasCustomRoles := mapToOperator(atlasData)
-
-	if cmp.Diff(latestConfig.CustomRoles, atlasCustomRoles, cmpopts.EquateEmpty()) == "" {
-		return true, nil
-	}
-
-	return cmp.Diff(akoProject.Spec.CustomRoles, atlasCustomRoles, cmpopts.EquateEmpty()) == "", nil
 }
