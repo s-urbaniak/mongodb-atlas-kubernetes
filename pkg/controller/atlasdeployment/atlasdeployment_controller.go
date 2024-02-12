@@ -35,10 +35,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
-
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/compat"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/kube"
 	mdbv1 "github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1/provider"
@@ -154,10 +150,6 @@ func (r *AtlasDeploymentReconciler) Reconcile(context context.Context, req ctrl.
 	// convertedDeployment is always a separate copy, to avoid changes on it to go back to k8s
 	convertedDeployment := deployment.DeepCopy()
 
-	if result := r.checkDeploymentIsManaged(workflowCtx, log, project, convertedDeployment); !result.IsOk() {
-		return result.ReconcileResult(), nil
-	}
-
 	deletionRequest, result := r.handleDeletion(workflowCtx, log, prevResult, project, deployment)
 	if deletionRequest {
 		return result.ReconcileResult(), nil
@@ -217,41 +209,6 @@ func (r *AtlasDeploymentReconciler) verifyNonTenantCase(deployment *mdbv1.AtlasD
 	}
 
 	modifyProviderSettings(pSettings, deploymentType)
-}
-
-func (r *AtlasDeploymentReconciler) checkDeploymentIsManaged(
-	workflowCtx *workflow.Context,
-	log *zap.SugaredLogger,
-	project *mdbv1.AtlasProject,
-	deployment *mdbv1.AtlasDeployment,
-) workflow.Result {
-	owner, err := customresource.IsOwner(
-		deployment,
-		r.ObjectDeletionProtection,
-		customresource.IsResourceManagedByOperator,
-		managedByAtlas(workflowCtx, project.ID(), log),
-	)
-
-	if err != nil {
-		result := workflow.Terminate(workflow.Internal, fmt.Sprintf("unable to resolve ownership for deletion protection: %s", err))
-		workflowCtx.SetConditionFromResult(status.DeploymentReadyType, result)
-		log.Error(result.GetMessage())
-
-		return result
-	}
-
-	if !owner {
-		result := workflow.Terminate(
-			workflow.AtlasDeletionProtection,
-			"unable to reconcile Deployment due to deletion protection being enabled. see https://dochub.mongodb.org/core/ako-deletion-protection for further information",
-		)
-		workflowCtx.SetConditionFromResult(status.DeploymentReadyType, result)
-		log.Error(result.GetMessage())
-
-		return result
-	}
-
-	return workflow.OK()
 }
 
 func (r *AtlasDeploymentReconciler) handleDeletion(
@@ -587,112 +544,6 @@ func (r *AtlasDeploymentReconciler) removeDeletionFinalizer(context context.Cont
 }
 
 type deploymentHandlerFunc func(workflowCtx *workflow.Context, project *mdbv1.AtlasProject, deployment *mdbv1.AtlasDeployment, req reconcile.Request) (workflow.Result, error)
-
-type atlasClusterType int
-
-const (
-	Unset atlasClusterType = iota
-	Advanced
-	Serverless
-)
-
-type atlasTypedCluster struct {
-	clusterType atlasClusterType
-	serverless  *mongodbatlas.Cluster
-	advanced    *mongodbatlas.AdvancedCluster
-}
-
-func managedByAtlas(workflowCtx *workflow.Context, projectID string, log *zap.SugaredLogger) customresource.AtlasChecker {
-	return func(resource mdbv1.AtlasCustomResource) (bool, error) {
-		deployment, ok := resource.(*mdbv1.AtlasDeployment)
-		if !ok {
-			return false, errors.New("failed to match resource type as AtlasDeployment")
-		}
-
-		typedAtlasCluster, err := findTypedAtlasCluster(workflowCtx, projectID, deployment.GetDeploymentName())
-		if typedAtlasCluster == nil || err != nil {
-			return false, err
-		}
-
-		isSame, err := deploymentMatchesSpec(log, typedAtlasCluster, deployment)
-		if err != nil {
-			return true, err
-		}
-
-		return !isSame, nil
-	}
-}
-
-func findTypedAtlasCluster(workflowCtx *workflow.Context, projectID, deploymentName string) (*atlasTypedCluster, error) {
-	advancedCluster, _, err := workflowCtx.Client.AdvancedClusters.Get(workflowCtx.Context, projectID, deploymentName)
-	if err == nil {
-		return &atlasTypedCluster{clusterType: Advanced, advanced: advancedCluster}, nil
-	}
-	var apiError *mongodbatlas.ErrorResponse
-	if errors.As(err, &apiError) &&
-		apiError.ErrorCode != atlas.ClusterNotFound &&
-		apiError.ErrorCode != atlas.ServerlessInstanceFromClusterAPI {
-		return nil, err
-	}
-	// if not found, maybe it is a serverless instead
-	serverless, _, err := workflowCtx.Client.ServerlessInstances.Get(workflowCtx.Context, projectID, deploymentName)
-	if err == nil {
-		return &atlasTypedCluster{clusterType: Serverless, serverless: serverless}, nil
-	}
-	if errors.As(err, &apiError) && apiError.ErrorCode == atlas.ServerlessInstanceNotFound {
-		return nil, nil
-	}
-	return nil, err
-}
-
-func deploymentMatchesSpec(log *zap.SugaredLogger, atlasSpec *atlasTypedCluster, deployment *mdbv1.AtlasDeployment) (bool, error) {
-	if deployment.IsServerless() {
-		if atlasSpec.clusterType != Serverless {
-			return false, nil
-		}
-		return serverlessDeploymentMatchesSpec(log, atlasSpec.serverless, deployment.Spec.ServerlessSpec)
-	}
-	if atlasSpec.clusterType != Advanced {
-		return false, nil
-	}
-	return advancedDeploymentMatchesSpec(log, atlasSpec.advanced, deployment.Spec.DeploymentSpec)
-}
-
-func serverlessDeploymentMatchesSpec(log *zap.SugaredLogger, atlasSpec *mongodbatlas.Cluster, operatorSpec *mdbv1.ServerlessSpec) (bool, error) {
-	clusterMerged := mongodbatlas.Cluster{}
-	if err := compat.JSONCopy(&clusterMerged, atlasSpec); err != nil {
-		return false, err
-	}
-
-	if err := compat.JSONCopy(&clusterMerged, operatorSpec); err != nil {
-		return false, err
-	}
-
-	d := cmp.Diff(atlasSpec, &clusterMerged, cmpopts.EquateEmpty())
-	if d != "" {
-		log.Debugf("Serverless deployment differs from spec: %s", d)
-	}
-
-	return d == "", nil
-}
-
-func advancedDeploymentMatchesSpec(log *zap.SugaredLogger, atlasSpec *mongodbatlas.AdvancedCluster, operatorSpec *mdbv1.AdvancedDeploymentSpec) (bool, error) {
-	clusterMerged := mongodbatlas.AdvancedCluster{}
-	if err := compat.JSONCopy(&clusterMerged, atlasSpec); err != nil {
-		return false, err
-	}
-
-	if err := compat.JSONCopy(&clusterMerged, operatorSpec); err != nil {
-		return false, err
-	}
-
-	d := cmp.Diff(atlasSpec, &clusterMerged, cmpopts.EquateEmpty())
-	if d != "" {
-		log.Debugf("Advanced deployment differs from spec: %s", d)
-	}
-
-	return d == "", nil
-}
 
 // Parse through tags and verify that all keys are unique. Return error otherwise.
 func uniqueKey(deploymentSpec *mdbv1.AtlasDeploymentSpec) error {
