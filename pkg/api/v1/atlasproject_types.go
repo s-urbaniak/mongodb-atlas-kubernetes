@@ -17,6 +17,10 @@ limitations under the License.
 package v1
 
 import (
+	"slices"
+
+	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/cmp"
+
 	"go.uber.org/zap/zapcore"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -153,6 +157,19 @@ func (p AtlasProjectSpec) MarshalLogObject(e zapcore.ObjectEncoder) error {
 
 	e.AddReflected("AtlasProjectSpec", printable)
 	return nil
+}
+
+func (s *AtlasProjectSpec) Normalize() *AtlasProjectSpec {
+	sCopy := s.DeepCopy()
+	for i := range sCopy.AlertConfigurations {
+		slices.SortFunc(sCopy.AlertConfigurations[i].Matchers, cmp.ByJSON[Matcher])
+		for j := range sCopy.AlertConfigurations[i].Notifications {
+			slices.Sort(sCopy.AlertConfigurations[i].Notifications[j].Roles)
+		}
+		slices.SortFunc(sCopy.AlertConfigurations[i].Notifications, cmp.ByJSON[Notification])
+	}
+	slices.SortFunc(sCopy.AlertConfigurations, cmp.ByJSON[AlertConfiguration])
+	return sCopy
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
