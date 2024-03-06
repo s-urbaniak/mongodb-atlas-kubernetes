@@ -161,14 +161,41 @@ func (p AtlasProjectSpec) MarshalLogObject(e zapcore.ObjectEncoder) error {
 
 func (s *AtlasProjectSpec) Normalize() *AtlasProjectSpec {
 	sCopy := s.DeepCopy()
+
+	for i := range sCopy.PrivateEndpoints {
+		slices.SortFunc(sCopy.PrivateEndpoints[i].Endpoints, cmp.ByJSON[GCPEndpoint])
+	}
+
 	for i := range sCopy.AlertConfigurations {
-		slices.SortFunc(sCopy.AlertConfigurations[i].Matchers, cmp.ByJSON[Matcher])
 		for j := range sCopy.AlertConfigurations[i].Notifications {
 			slices.Sort(sCopy.AlertConfigurations[i].Notifications[j].Roles)
 		}
 		slices.SortFunc(sCopy.AlertConfigurations[i].Notifications, cmp.ByJSON[Notification])
+		slices.SortFunc(sCopy.AlertConfigurations[i].Matchers, cmp.ByJSON[Matcher])
 	}
+
+	for i := range sCopy.CustomRoles {
+		slices.SortFunc(sCopy.CustomRoles[i].InheritedRoles, cmp.ByJSON[Role])
+		for j := range sCopy.CustomRoles[i].Actions {
+			slices.SortFunc(sCopy.CustomRoles[i].Actions[j].Resources, cmp.ByJSON[Resource])
+		}
+		slices.SortFunc(sCopy.CustomRoles[i].Actions, cmp.ByJSON[Action])
+	}
+
+	for i := range sCopy.Teams {
+		slices.SortFunc(sCopy.Teams[i].Roles, cmp.ByJSON[TeamRole])
+	}
+
+	slices.SortFunc(sCopy.ProjectIPAccessList, cmp.ByJSON[project.IPAccessList])
+	slices.SortFunc(sCopy.PrivateEndpoints, cmp.ByJSON[PrivateEndpoint])
+	slices.SortFunc(sCopy.CloudProviderAccessRoles, cmp.ByJSON[CloudProviderAccessRole])
+	slices.SortFunc(sCopy.CloudProviderIntegrations, cmp.ByJSON[CloudProviderIntegration])
 	slices.SortFunc(sCopy.AlertConfigurations, cmp.ByJSON[AlertConfiguration])
+	slices.SortFunc(sCopy.NetworkPeers, cmp.ByJSON[NetworkPeer])
+	slices.SortFunc(sCopy.Integrations, cmp.ByJSON[project.Integration])
+	slices.SortFunc(sCopy.CustomRoles, cmp.ByJSON[CustomRole])
+	slices.SortFunc(sCopy.Teams, cmp.ByJSON[Team])
+
 	return sCopy
 }
 
