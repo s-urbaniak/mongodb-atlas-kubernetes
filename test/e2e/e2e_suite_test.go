@@ -13,6 +13,7 @@ import (
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/test/helper/e2e/api/atlas"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/test/helper/e2e/config"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/test/helper/e2e/utils"
+	akoginkgo "github.com/mongodb/mongodb-atlas-kubernetes/v2/test/helper/observability/ginkgo"
 )
 
 const (
@@ -28,6 +29,7 @@ var (
 func TestE2e(t *testing.T) {
 	control.SkipTestUnless(t, "AKO_E2E_TEST")
 
+	akoginkgo.RegisterCallbacks()
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Atlas Operator E2E Test Suite")
 }

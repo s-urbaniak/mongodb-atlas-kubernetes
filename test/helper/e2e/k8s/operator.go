@@ -2,20 +2,21 @@ package k8s
 
 import (
 	"context"
+	"github.com/go-logr/zapr"
+	"go.uber.org/zap/zapcore"
 	"os"
 	"sync"
+	"time"
 
-	"github.com/go-logr/zapr"
 	. "github.com/onsi/ginkgo/v2"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"go.uber.org/zap/zaptest"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlruntimezap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/collection"
@@ -34,15 +35,19 @@ func BuildManager(initCfg *Config) (manager.Manager, error) {
 	utilruntime.Must(scheme.AddToScheme(akoScheme))
 	utilruntime.Must(akov2.AddToScheme(akoScheme))
 
-	config := mergeConfiguration(initCfg)
-	logger := zaptest.NewLogger(
-		GinkgoT(),
-		zaptest.WrapOptions(
-			zap.ErrorOutput(zapcore.Lock(zapcore.AddSync(GinkgoWriter))),
-		),
+	rawLogger := ctrlruntimezap.NewRaw(
+		ctrlruntimezap.WriteTo(GinkgoWriter),
+		func(options *ctrlruntimezap.Options) {
+			options.TimeEncoder = func(t time.Time, e zapcore.PrimitiveArrayEncoder) {
+				zapcore.TimeEncoderOfLayout(time.RFC3339)(t.UTC(), e)
+			}
+		},
 	)
-	ctrl.SetLogger(zapr.NewLogger(logger))
-	setupLog := logger.Named("setup").Sugar()
+
+	ctrl.SetLogger(zapr.NewLogger(rawLogger))
+	setupLog := rawLogger.Named("setup").Sugar()
+
+	config := mergeConfiguration(initCfg)
 	setupLog.Info("starting with configuration", zap.Any("config", *config))
 
 	// Ensure all concurrent managers configured per test share a single exit signal handler
@@ -53,7 +58,7 @@ func BuildManager(initCfg *Config) (manager.Manager, error) {
 	return operator.NewBuilder(operator.ManagerProviderFunc(ctrl.NewManager), akoScheme).
 		WithConfig(ctrl.GetConfigOrDie()).
 		WithNamespaces(collection.Keys(config.WatchedNamespaces)...).
-		WithLogger(logger).
+		WithLogger(rawLogger).
 		WithMetricAddress(config.MetricsAddr).
 		WithProbeAddress(config.ProbeAddr).
 		WithLeaderElection(config.EnableLeaderElection).

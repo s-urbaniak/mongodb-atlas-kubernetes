@@ -21,6 +21,8 @@ import (
 	"context"
 	"encoding/gob"
 	"fmt"
+	akoginkgo "github.com/mongodb/mongodb-atlas-kubernetes/v2/test/helper/observability/ginkgo"
+	"go.uber.org/zap/zapcore"
 	"os"
 	"path/filepath"
 	"testing"
@@ -30,7 +32,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.mongodb.org/atlas-sdk/v20231115008/admin"
-	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -81,6 +82,7 @@ func TestAPIs(t *testing.T) {
 	utilruntime.Must(scheme.AddToScheme(scheme.Scheme))
 	utilruntime.Must(akov2.AddToScheme(scheme.Scheme))
 
+	akoginkgo.RegisterCallbacks()
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Atlas Operator Namespaced Integration Test Suite")
 }
@@ -178,8 +180,16 @@ func prepareControllers(deletionProtection bool) (*corev1.Namespace, context.Can
 	Expect(namespace.Name).ToNot(BeEmpty())
 	GinkgoWriter.Printf("Generated namespace %q\n", namespace.Name)
 
-	logger := ctrzap.NewRaw(ctrzap.UseDevMode(true), ctrzap.WriteTo(GinkgoWriter), ctrzap.StacktraceLevel(zap.ErrorLevel))
-	ctrl.SetLogger(zapr.NewLogger(logger))
+	rawLogger := ctrzap.NewRaw(
+		ctrzap.WriteTo(GinkgoWriter),
+		func(options *ctrzap.Options) {
+			options.TimeEncoder = func(t time.Time, e zapcore.PrimitiveArrayEncoder) {
+				zapcore.TimeEncoderOfLayout(time.RFC3339)(t.UTC(), e)
+			}
+		},
+	)
+
+	ctrl.SetLogger(zapr.NewLogger(rawLogger))
 
 	// shallow copy global config
 	managerCfg := *cfg
@@ -187,7 +197,7 @@ func prepareControllers(deletionProtection bool) (*corev1.Namespace, context.Can
 	mgr, err := operator.NewBuilder(operator.ManagerProviderFunc(ctrl.NewManager), scheme.Scheme).
 		WithConfig(&managerCfg).
 		WithNamespaces(namespace.Name).
-		WithLogger(logger).
+		WithLogger(rawLogger).
 		WithAtlasDomain(atlasDomain).
 		WithSyncPeriod(30 * time.Minute).
 		WithAPISecret(client.ObjectKey{Name: "atlas-operator-api-key", Namespace: namespace.Name}).
