@@ -974,6 +974,10 @@ spec:
             required:
             - name
             type: object
+            x-kubernetes-validations:
+            - message: 'setting new customRoles is invalid: use the AtlasCustomRole
+                CRD instead.'
+              rule: '!has(self.customRoles) || has(oldSelf.customRoles)'
           status:
             description: AtlasProjectStatus defines the observed state of AtlasProject
             properties:

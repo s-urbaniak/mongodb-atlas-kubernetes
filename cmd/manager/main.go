@@ -48,8 +48,7 @@ const (
 	objectDeletionProtectionEnvVar     = "OBJECT_DELETION_PROTECTION"
 	subobjectDeletionProtectionEnvVar  = "SUBOBJECT_DELETION_PROTECTION"
 	objectDeletionProtectionDefault    = true
-	subobjectDeletionProtectionDefault = false
-	subobjectDeletionProtectionMessage = "Note: sub-object deletion protection is IGNORED because it does not work deterministically."
+	subobjectDeletionProtectionDefault = true
 )
 
 func main() {
@@ -80,13 +79,13 @@ func main() {
 		WithAtlasDomain(config.AtlasDomain).
 		WithAPISecret(config.GlobalAPISecret).
 		WithDeletionProtection(config.ObjectDeletionProtection).
+		WithSubObjectDeletionProtection(config.SubObjectDeletionProtection).
 		Build(ctx)
 	if err != nil {
 		setupLog.Error(err, "unable to start operator")
 		os.Exit(1)
 	}
 
-	setupLog.Info(subobjectDeletionProtectionMessage)
 	setupLog.Info("starting manager")
 	if err = mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
@@ -125,7 +124,7 @@ func parseConfiguration() Config {
 	flag.BoolVar(&config.ObjectDeletionProtection, objectDeletionProtectionFlag, objectDeletionProtectionDefault, "Defines if the operator deletes Atlas resource "+
 		"when a Custom Resource is deleted")
 	flag.BoolVar(&config.SubObjectDeletionProtection, subobjectDeletionProtectionFlag, subobjectDeletionProtectionDefault, "Defines if the operator overwrites "+
-		"(and consequently delete) subresources that were not previously created by the operator. "+subobjectDeletionProtectionMessage)
+		"(and consequently delete) subresources that were not previously created by the operator.")
 	appVersion := flag.Bool("v", false, "prints application version")
 	flag.Parse()
 

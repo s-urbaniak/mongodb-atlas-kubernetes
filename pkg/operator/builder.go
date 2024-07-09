@@ -65,12 +65,13 @@ type Builder struct {
 	leaderElection   bool
 	leaderElectionID string
 
-	atlasDomain        string
-	predicates         []predicate.Predicate
-	apiSecret          client.ObjectKey
-	atlasProvider      atlas.Provider
-	featureFlags       *featureflags.FeatureFlags
-	deletionProtection bool
+	atlasDomain                 string
+	predicates                  []predicate.Predicate
+	apiSecret                   client.ObjectKey
+	atlasProvider               atlas.Provider
+	featureFlags                *featureflags.FeatureFlags
+	deletionProtection          bool
+	subObjectDeletionProtection bool
 }
 
 func (b *Builder) WithConfig(config *rest.Config) *Builder {
@@ -138,6 +139,11 @@ func (b *Builder) WithDeletionProtection(deletionProtection bool) *Builder {
 	return b
 }
 
+func (b *Builder) WithSubObjectDeletionProtection(subObjectDeletionProtection bool) *Builder {
+	b.subObjectDeletionProtection = subObjectDeletionProtection
+	return b
+}
+
 // Build builds the controller manager and configure operator controllers
 func (b *Builder) Build(ctx context.Context) (manager.Manager, error) {
 	mergeDefaults(b)
@@ -201,6 +207,7 @@ func (b *Builder) Build(ctx context.Context) (manager.Manager, error) {
 		b.predicates,
 		b.atlasProvider,
 		b.deletionProtection,
+		b.subObjectDeletionProtection,
 		b.logger,
 	)
 	if err = projectReconciler.SetupWithManager(mgr); err != nil {

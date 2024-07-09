@@ -3,6 +3,7 @@ package validate
 import (
 	"errors"
 	"fmt"
+	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/customresource"
 	"net"
 	"reflect"
 	"regexp"
@@ -113,7 +114,7 @@ func Project(project *akov2.AtlasProject, isGov bool) error {
 		return err
 	}
 
-	if err := projectCustomRoles(project.Spec.CustomRoles); err != nil {
+	if err := projectCustomRoles(project); err != nil {
 		return err
 	}
 
@@ -456,15 +457,22 @@ func projectIPAccessList(ipAccessList []project.IPAccessList) error {
 	return err
 }
 
-func projectCustomRoles(customRoles []akov2.CustomRole) error {
-	if len(customRoles) == 0 {
+func projectCustomRoles(project *akov2.AtlasProject) error {
+	_, isUpdate := project.GetAnnotations()[customresource.AnnotationLastAppliedConfiguration]
+	if !isUpdate {
+		if len(project.Spec.CustomRoles) > 0 {
+			return errors.New(`spec: Invalid value: setting new customRoles is invalid: use the AtlasCustomRole CRD instead.`)
+		}
+	}
+
+	if len(project.Spec.CustomRoles) == 0 {
 		return nil
 	}
 
 	var err error
 	customRolesMap := map[string]struct{}{}
 
-	for _, customRole := range customRoles {
+	for _, customRole := range project.Spec.CustomRoles {
 		if _, ok := customRolesMap[customRole.Name]; ok {
 			err = errors.Join(err, fmt.Errorf("the custom role \"%s\" is duplicate. custom role name must be unique", customRole.Name))
 		}

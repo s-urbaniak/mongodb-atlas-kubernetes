@@ -14,7 +14,7 @@ import (
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/workflow"
 )
 
-func ensureCustomRoles(workflowCtx *workflow.Context, project *akov2.AtlasProject) workflow.Result {
+func ensureCustomRoles(workflowCtx *workflow.Context, project *akov2.AtlasProject, subobjectDeletionProtection bool) workflow.Result {
 	currentCustomRoles, err := fetchCustomRoles(workflowCtx, project.ID())
 	if err != nil {
 		return workflow.Terminate(workflow.ProjectCustomRolesReady, err.Error())
@@ -22,7 +22,10 @@ func ensureCustomRoles(workflowCtx *workflow.Context, project *akov2.AtlasProjec
 
 	ops := calculateChanges(currentCustomRoles, project.Spec.CustomRoles)
 
-	deleteStatus := deleteCustomRoles(workflowCtx, project.ID(), ops.Delete)
+	deleteStatus := map[string]status.CustomRole{}
+	if !subobjectDeletionProtection {
+		deleteStatus = deleteCustomRoles(workflowCtx, project.ID(), ops.Delete)
+	}
 	updateStatus := updateCustomRoles(workflowCtx, project.ID(), ops.Update)
 	createStatus := createCustomRoles(workflowCtx, project.ID(), ops.Create)
 

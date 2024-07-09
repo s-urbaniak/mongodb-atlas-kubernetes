@@ -42,6 +42,7 @@ func init() {
 }
 
 // AtlasProjectSpec defines the desired state of Project in Atlas
+// +kubebuilder:validation:XValidation:rule=!has(self.customRoles) || has(oldSelf.customRoles), message="setting new customRoles is invalid: use the AtlasCustomRole CRD instead."
 type AtlasProjectSpec struct {
 
 	// Name is the name of the Project that is created in Atlas by the Operator if it doesn't exist yet.

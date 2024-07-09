@@ -325,7 +325,7 @@ func (r *AtlasProjectReconciler) ensureProjectResources(workflowCtx *workflow.Co
 	}
 	results = append(results, result)
 
-	if result = ensureCustomRoles(workflowCtx, project); result.IsOk() {
+	if result = ensureCustomRoles(workflowCtx, project, r.SubObjectDeletionProtection); result.IsOk() {
 		r.EventRecorder.Event(project, "Normal", string(api.ProjectCustomRolesReadyType), "")
 	}
 	results = append(results, result)
@@ -399,16 +399,18 @@ func NewAtlasProjectReconciler(
 	predicates []predicate.Predicate,
 	atlasProvider atlas.Provider,
 	deletionProtection bool,
+	subObjectDeletionProtection bool,
 	logger *zap.Logger,
 ) *AtlasProjectReconciler {
 	return &AtlasProjectReconciler{
-		Scheme:                   mgr.GetScheme(),
-		Client:                   mgr.GetClient(),
-		EventRecorder:            mgr.GetEventRecorderFor("AtlasProject"),
-		GlobalPredicates:         predicates,
-		Log:                      logger.Named("controllers").Named("AtlasProject").Sugar(),
-		AtlasProvider:            atlasProvider,
-		ObjectDeletionProtection: deletionProtection,
+		Scheme:                      mgr.GetScheme(),
+		Client:                      mgr.GetClient(),
+		EventRecorder:               mgr.GetEventRecorderFor("AtlasProject"),
+		GlobalPredicates:            predicates,
+		Log:                         logger.Named("controllers").Named("AtlasProject").Sugar(),
+		AtlasProvider:               atlasProvider,
+		ObjectDeletionProtection:    deletionProtection,
+		SubObjectDeletionProtection: subObjectDeletionProtection,
 	}
 }
 
