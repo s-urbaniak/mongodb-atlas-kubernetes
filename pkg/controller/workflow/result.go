@@ -20,6 +20,7 @@ type Result struct {
 	// an error
 	warning bool
 	deleted bool
+	err     error
 }
 
 // OK indicates that the reconciliation logic can proceed further
@@ -34,13 +35,14 @@ func OK() Result {
 // This is not an expected termination of the reconciliation process so 'warning' flag is set to 'true'.
 // 'reason' and 'message' indicate the error state and are supposed to be reflected in the `conditions` for the
 // reconciled Custom Resource.
-func Terminate(reason ConditionReason, message string) Result {
+func Terminate(reason ConditionReason, err error) Result {
 	return Result{
 		terminated:   true,
 		requeueAfter: DefaultRetry,
 		reason:       reason,
-		message:      message,
+		message:      err.Error(),
 		warning:      true,
+		err:          err,
 	}
 }
 
