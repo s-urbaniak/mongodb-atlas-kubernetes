@@ -21,21 +21,25 @@ func (t *DryRunTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	case http.MethodTrace:
 	case http.MethodHead:
 	default:
-		t.Recorder.Recordf(nil, "HTTP", req.Method, "Atlas SDK invocation: %v", req.URL.String())
+		t.Recorder.Recordf(nil, req.Method, "Would execute %v %v", req.Method, req.URL.Path)
 		return nil, dryrun.ErrDryRun
 	}
 
 	return t.Delegate.RoundTrip(req)
 }
 
-func NewClient(domain, publicKey, privateKey string) (*admin.APIClient, error) {
-	dryRunTransport := &DryRunTransport{
-		Recorder: &dryrun.SimpleRecorder{},
-		Delegate: digest.NewTransport(publicKey, privateKey),
+func NewClient(domain, publicKey, privateKey string, dryRun bool) (*admin.APIClient, error) {
+	var transport http.RoundTripper = digest.NewTransport(publicKey, privateKey)
+
+	if dryRun {
+		transport = &DryRunTransport{
+			Recorder: &dryrun.SimpleRecorder{},
+			Delegate: transport,
+		}
 	}
 
 	client := &http.Client{
-		Transport: dryRunTransport,
+		Transport: transport,
 	}
 
 	return admin.NewClient(

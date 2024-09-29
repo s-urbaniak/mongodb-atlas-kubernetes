@@ -47,7 +47,7 @@ func TestProvider_Client(t *testing.T) {
 	t.Run("should return Atlas API client and organization id using global secret", func(t *testing.T) {
 		p := NewProductionProvider("https://cloud.mongodb.com/", client.ObjectKey{Name: "api-secret", Namespace: "default"}, k8sClient)
 
-		c, id, err := p.Client(context.Background(), nil, zaptest.NewLogger(t).Sugar())
+		c, id, err := p.Client(context.Background(), nil, zaptest.NewLogger(t).Sugar(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, "1234567890", id)
 		assert.NotNil(t, c)
@@ -56,7 +56,7 @@ func TestProvider_Client(t *testing.T) {
 	t.Run("should return Atlas API client and organization id using connection secret", func(t *testing.T) {
 		p := NewProductionProvider("https://cloud.mongodb.com/", client.ObjectKey{Name: "global-secret", Namespace: "default"}, k8sClient)
 
-		c, id, err := p.Client(context.Background(), &client.ObjectKey{Name: "api-secret", Namespace: "default"}, zaptest.NewLogger(t).Sugar())
+		c, id, err := p.Client(context.Background(), &client.ObjectKey{Name: "api-secret", Namespace: "default"}, zaptest.NewLogger(t).Sugar(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, "1234567890", id)
 		assert.NotNil(t, c)

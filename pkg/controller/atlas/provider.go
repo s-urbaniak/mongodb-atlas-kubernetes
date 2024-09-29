@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/dryrun"
+
 	"go.mongodb.org/atlas-sdk/v20231115008/admin"
 	"go.mongodb.org/atlas/mongodbatlas"
 	"go.uber.org/zap"
@@ -28,8 +30,8 @@ const (
 )
 
 type Provider interface {
-	Client(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger) (*mongodbatlas.Client, string, error)
-	SdkClient(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger) (*admin.APIClient, string, error)
+	Client(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger, dryRun bool) (*mongodbatlas.Client, string, error)
+	SdkClient(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger, dryRun bool) (*admin.APIClient, string, error)
 	IsCloudGov() bool
 	IsResourceSupported(resource api.AtlasCustomResource) bool
 }
@@ -92,17 +94,25 @@ func (p *ProductionProvider) IsResourceSupported(resource api.AtlasCustomResourc
 	return false
 }
 
-func (p *ProductionProvider) Client(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger) (*mongodbatlas.Client, string, error) {
+func (p *ProductionProvider) Client(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger, dryRun bool) (*mongodbatlas.Client, string, error) {
 	secretData, err := getSecrets(ctx, p.k8sClient, secretRef, &p.globalSecretRef)
 	if err != nil {
 		return nil, "", err
+	}
+
+	var transport = http.DefaultTransport
+	if dryRun {
+		transport = &DryRunTransport{
+			Recorder: &dryrun.SimpleRecorder{},
+			Delegate: transport,
+		}
 	}
 
 	clientCfg := []httputil.ClientOpt{
 		httputil.Digest(secretData.PublicKey, secretData.PrivateKey),
 		httputil.LoggingTransport(log),
 	}
-	httpClient, err := httputil.DecorateClient(&http.Client{Transport: http.DefaultTransport}, clientCfg...)
+	httpClient, err := httputil.DecorateClient(&http.Client{Transport: transport}, clientCfg...)
 	if err != nil {
 		return nil, "", err
 	}
@@ -112,7 +122,7 @@ func (p *ProductionProvider) Client(ctx context.Context, secretRef *client.Objec
 	return c, secretData.OrgID, err
 }
 
-func (p *ProductionProvider) SdkClient(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger) (*admin.APIClient, string, error) {
+func (p *ProductionProvider) SdkClient(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger, dryRun bool) (*admin.APIClient, string, error) {
 	secretData, err := getSecrets(ctx, p.k8sClient, secretRef, &p.globalSecretRef)
 	if err != nil {
 		return nil, "", err
@@ -125,7 +135,7 @@ func (p *ProductionProvider) SdkClient(ctx context.Context, secretRef *client.Ob
 	//	return nil, "", err
 	//}
 
-	c, err := NewClient(p.domain, secretData.PublicKey, secretData.PrivateKey)
+	c, err := NewClient(p.domain, secretData.PublicKey, secretData.PrivateKey, dryRun)
 	if err != nil {
 		return nil, "", err
 	}
