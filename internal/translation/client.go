@@ -12,7 +12,7 @@ import (
 )
 
 func NewVersionedClient(ctx context.Context, provider atlas.Provider, secretRef *types.NamespacedName, log *zap.SugaredLogger) (*admin.APIClient, error) {
-	apiClient, _, err := provider.SdkClient(ctx, secretRef, log)
+	apiClient, _, err := provider.SdkClient(ctx, secretRef, log, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to instantiate Versioned Atlas client: %w", err)
 	}

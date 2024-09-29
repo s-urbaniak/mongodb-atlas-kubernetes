@@ -12,18 +12,18 @@ import (
 )
 
 type TestProvider struct {
-	ClientFunc      func(secretRef *client.ObjectKey, log *zap.SugaredLogger) (*mongodbatlas.Client, string, error)
-	SdkClientFunc   func(secretRef *client.ObjectKey, log *zap.SugaredLogger) (*admin.APIClient, string, error)
+	ClientFunc      func(secretRef *client.ObjectKey, log *zap.SugaredLogger, dryRun bool) (*mongodbatlas.Client, string, error)
+	SdkClientFunc   func(secretRef *client.ObjectKey, log *zap.SugaredLogger, dryRun bool) (*admin.APIClient, string, error)
 	IsCloudGovFunc  func() bool
 	IsSupportedFunc func() bool
 }
 
-func (f *TestProvider) Client(_ context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger) (*mongodbatlas.Client, string, error) {
-	return f.ClientFunc(secretRef, log)
+func (f *TestProvider) Client(_ context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger, dryRun bool) (*mongodbatlas.Client, string, error) {
+	return f.ClientFunc(secretRef, log, dryRun)
 }
 
-func (f *TestProvider) SdkClient(_ context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger) (*admin.APIClient, string, error) {
-	return f.SdkClientFunc(secretRef, log)
+func (f *TestProvider) SdkClient(_ context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger, dryRun bool) (*admin.APIClient, string, error) {
+	return f.SdkClientFunc(secretRef, log, dryRun)
 }
 
 func (f *TestProvider) IsCloudGov() bool {

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/dryrun"
 
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -80,7 +81,30 @@ type AtlasProjectReconciler struct {
 // +kubebuilder:rbac:groups=atlas.mongodb.com,namespace=default,resources=atlasteams/status,verbs=get;update;patch
 
 func (r *AtlasProjectReconciler) DryRun(ctx context.Context, object client.Object) error {
-	return nil
+	log := r.Log.With("atlasproject", "dry-run", object.GetName())
+
+	req, ok := object.(*akov2.AtlasProject)
+	if !ok {
+		return fmt.Errorf("unexpected type %T", object)
+	}
+
+	var obj = &akov2.AtlasProject{}
+	err := r.Client.Get(ctx, types.NamespacedName{
+		Namespace: req.Namespace,
+		Name:      req.Name,
+	}, obj)
+	if err != nil {
+		return err
+	}
+	obj.Spec = req.Spec
+
+	conditions := akov2.InitCondition(obj, api.FalseCondition(api.ReadyType))
+	workflowCtx := workflow.NewContext(log, conditions, ctx)
+	_, err = r.reconcile(workflowCtx, log, true, obj)
+	if errors.Is(err, dryrun.ErrDryRun) {
+		return nil
+	}
+	return err
 }
 
 func (r *AtlasProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -97,7 +121,7 @@ func (r *AtlasProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		if !atlasProject.GetDeletionTimestamp().IsZero() {
 			err := customresource.ManageFinalizer(ctx, r.Client, atlasProject, customresource.UnsetFinalizer)
 			if err != nil {
-				result = workflow.Terminate(workflow.Internal, err)
+				result := workflow.Terminate(workflow.Internal, err)
 				log.Errorw("Failed to remove finalizer", "error", err)
 				return result.ReconcileResult(), nil
 			}
@@ -114,6 +138,10 @@ func (r *AtlasProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		statushandler.Update(workflowCtx, r.Client, r.EventRecorder, atlasProject)
 	}()
 
+	return r.reconcile(workflowCtx, log, false, atlasProject)
+}
+
+func (r *AtlasProjectReconciler) reconcile(workflowCtx *workflow.Context, log *zap.SugaredLogger, dryRun bool, atlasProject *akov2.AtlasProject) (ctrl.Result, error) {
 	resourceVersionIsValid := customresource.ValidateResourceVersion(workflowCtx, atlasProject, r.Log)
 	if !resourceVersionIsValid.IsOk() {
 		r.Log.Debugf("project validation result: %v", resourceVersionIsValid)
@@ -134,7 +162,7 @@ func (r *AtlasProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return result.ReconcileResult(), nil
 	}
 
-	atlasSdkClient, orgID, err := r.AtlasProvider.SdkClient(workflowCtx.Context, atlasProject.ConnectionSecretObjectKey(), log)
+	atlasSdkClient, orgID, err := r.AtlasProvider.SdkClient(workflowCtx.Context, atlasProject.ConnectionSecretObjectKey(), log, dryRun)
 	if err != nil {
 		result := workflow.Terminate(workflow.AtlasAPIAccessNotConfigured, err)
 		setCondition(workflowCtx, api.ProjectReadyType, result)
@@ -143,7 +171,7 @@ func (r *AtlasProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	workflowCtx.SdkClient = atlasSdkClient
 	r.projectService = project.NewProjectAPIService(atlasSdkClient.ProjectsApi)
 
-	atlasClient, _, err := r.AtlasProvider.Client(workflowCtx.Context, atlasProject.ConnectionSecretObjectKey(), log)
+	atlasClient, _, err := r.AtlasProvider.Client(workflowCtx.Context, atlasProject.ConnectionSecretObjectKey(), log, dryRun)
 	if err != nil {
 		result := workflow.Terminate(workflow.AtlasAPIAccessNotConfigured, err)
 		setCondition(workflowCtx, api.ProjectReadyType, result)
@@ -152,7 +180,17 @@ func (r *AtlasProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	workflowCtx.OrgID = orgID
 	workflowCtx.Client = atlasClient
 
-	return r.handleProject(workflowCtx, orgID, atlasProject)
+	projectResult := r.handleProject(workflowCtx, orgID, atlasProject)
+	if !projectResult.IsOk() {
+		return projectResult.ReconcileResult(), nil
+	}
+
+	err = customresource.ApplyLastConfigApplied(workflowCtx.Context, atlasProject, r.Client)
+	if err != nil {
+		return r.terminate(workflowCtx, workflow.Internal, err).ReconcileResult(), nil
+	}
+
+	return projectResult.ReconcileResult(), nil
 }
 
 // ensureProjectResources ensures IP Access List, Private Endpoints, Integrations, Maintenance Window and Encryption at Rest

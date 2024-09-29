@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/fields"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/translation/project"
@@ -18,7 +17,7 @@ import (
 )
 
 // handleProject creates the project if it doesn't exist yet. Returns the project ID
-func (r *AtlasProjectReconciler) handleProject(ctx *workflow.Context, orgID string, atlasProject *akov2.AtlasProject) (ctrl.Result, error) {
+func (r *AtlasProjectReconciler) handleProject(ctx *workflow.Context, orgID string, atlasProject *akov2.AtlasProject) workflow.Result {
 	projectInAtlas, err := r.projectService.GetProjectByName(ctx.Context, atlasProject.Spec.Name)
 	if err != nil {
 		return r.terminate(ctx, workflow.ProjectNotCreatedInAtlas, err)
@@ -43,26 +42,24 @@ func (r *AtlasProjectReconciler) handleProject(ctx *workflow.Context, orgID stri
 	}
 
 	ctx.SetConditionTrue(api.ProjectReadyType)
-	r.EventRecorder.Event(atlasProject, "Normal", string(api.ProjectReadyType), "")
+
+	// TODO: The following line seems unnecessary.
+	// We are emitting an Event without any message, it is empty string.
+	// r.EventRecorder.Event(atlasProject, "Normal", string(api.ProjectReadyType), "")
 
 	results := r.ensureProjectResources(ctx, atlasProject)
 	for i := range results {
 		if !results[i].IsOk() {
 			logIfWarning(ctx, results[i])
 
-			return results[i].ReconcileResult(), nil
+			return results[i]
 		}
-	}
-
-	err = customresource.ApplyLastConfigApplied(ctx.Context, atlasProject, r.Client)
-	if err != nil {
-		return r.terminate(ctx, workflow.Internal, err)
 	}
 
 	return r.ready(ctx, projectInAtlas.ID)
 }
 
-func (r *AtlasProjectReconciler) create(ctx *workflow.Context, orgID string, atlasProject *akov2.AtlasProject) (ctrl.Result, error) {
+func (r *AtlasProjectReconciler) create(ctx *workflow.Context, orgID string, atlasProject *akov2.AtlasProject) workflow.Result {
 	projectInAKO := project.NewProject(atlasProject, orgID)
 	err := r.projectService.CreateProject(ctx.Context, projectInAKO)
 	if err != nil {
@@ -77,15 +74,15 @@ func (r *AtlasProjectReconciler) create(ctx *workflow.Context, orgID string, atl
 	return r.manage(ctx, atlasProject, projectInAKO.ID)
 }
 
-func (r *AtlasProjectReconciler) terminate(ctx *workflow.Context, errorCondition workflow.ConditionReason, err error) (ctrl.Result, error) {
+func (r *AtlasProjectReconciler) terminate(ctx *workflow.Context, errorCondition workflow.ConditionReason, err error) workflow.Result {
 	r.Log.Error(err)
 	terminated := workflow.Terminate(errorCondition, err)
 	ctx.SetConditionFromResult(api.ProjectReadyType, terminated)
 
-	return terminated.ReconcileResult(), nil
+	return terminated
 }
 
-func (r *AtlasProjectReconciler) delete(ctx *workflow.Context, orgID string, atlasProject *akov2.AtlasProject) (ctrl.Result, error) {
+func (r *AtlasProjectReconciler) delete(ctx *workflow.Context, orgID string, atlasProject *akov2.AtlasProject) workflow.Result {
 	hasDeps, err := r.hasDependencies(ctx, atlasProject)
 	if err != nil {
 		return r.terminate(ctx, workflow.Internal, fmt.Errorf("failed to determine if project has dependencies: %w", err))
@@ -122,27 +119,27 @@ func (r *AtlasProjectReconciler) delete(ctx *workflow.Context, orgID string, atl
 		}
 	}
 
-	return workflow.OK().ReconcileResult(), nil
+	return workflow.OK()
 }
 
-func (r *AtlasProjectReconciler) ready(ctx *workflow.Context, projectID string) (ctrl.Result, error) {
+func (r *AtlasProjectReconciler) ready(ctx *workflow.Context, projectID string) workflow.Result {
 	ctx.EnsureStatusOption(status.AtlasProjectIDOption(projectID))
 	result := workflow.OK()
 	ctx.SetConditionFromResult(api.ProjectReadyType, result)
 	ctx.SetConditionFromResult(api.ReadyType, result)
 
-	return result.ReconcileResult(), nil
+	return result
 }
 
-func (r *AtlasProjectReconciler) release(ctx *workflow.Context, atlasProject *akov2.AtlasProject) (ctrl.Result, error) {
+func (r *AtlasProjectReconciler) release(ctx *workflow.Context, atlasProject *akov2.AtlasProject) workflow.Result {
 	if err := customresource.ManageFinalizer(ctx.Context, r.Client, atlasProject, customresource.UnsetFinalizer); err != nil {
 		return r.terminate(ctx, workflow.AtlasFinalizerNotRemoved, err)
 	}
 
-	return workflow.OK().ReconcileResult(), nil
+	return workflow.OK()
 }
 
-func (r *AtlasProjectReconciler) manage(ctx *workflow.Context, atlasProject *akov2.AtlasProject, projectID string) (ctrl.Result, error) {
+func (r *AtlasProjectReconciler) manage(ctx *workflow.Context, atlasProject *akov2.AtlasProject, projectID string) workflow.Result {
 	r.Log.Debugw("Add deletion finalizer", "name", customresource.FinalizerLabel)
 	if err := customresource.ManageFinalizer(ctx.Context, r.Client, atlasProject, customresource.SetFinalizer); err != nil {
 		return r.terminate(ctx, workflow.AtlasFinalizerNotSet, err)
@@ -152,7 +149,7 @@ func (r *AtlasProjectReconciler) manage(ctx *workflow.Context, atlasProject *ako
 	result := workflow.InProgress(workflow.ProjectBeingConfiguredInAtlas, "configuring project in Atlas")
 	ctx.SetConditionFromResult(api.ProjectReadyType, result)
 
-	return result.ReconcileResult(), nil
+	return result
 }
 
 func (r *AtlasProjectReconciler) hasDependencies(ctx *workflow.Context, project *akov2.AtlasProject) (bool, error) {

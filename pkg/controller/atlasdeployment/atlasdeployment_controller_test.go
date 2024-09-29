@@ -377,7 +377,7 @@ func TestRegularClusterReconciliation(t *testing.T) {
 	orgID := "0987654321"
 	logger := zaptest.NewLogger(t).Sugar()
 	atlasProvider := &atlasmock.TestProvider{
-		SdkClientFunc: func(secretRef *client.ObjectKey, log *zap.SugaredLogger) (*admin.APIClient, string, error) {
+		SdkClientFunc: func(secretRef *client.ObjectKey, log *zap.SugaredLogger, _ bool) (*admin.APIClient, string, error) {
 			clusterAPI := mockadmin.NewClustersApi(t)
 			clusterAPI.EXPECT().GetCluster(context.Background(), project.ID(), d.GetDeploymentName()).
 				Return(admin.GetClusterApiRequest{ApiService: clusterAPI})
@@ -444,7 +444,7 @@ func TestRegularClusterReconciliation(t *testing.T) {
 				ServerlessInstancesApi: mockadmin.NewServerlessInstancesApi(t),
 			}, orgID, nil
 		},
-		ClientFunc: func(secretRef *client.ObjectKey, log *zap.SugaredLogger) (*mongodbatlas.Client, string, error) {
+		ClientFunc: func(secretRef *client.ObjectKey, log *zap.SugaredLogger, _ bool) (*mongodbatlas.Client, string, error) {
 			return &mongodbatlas.Client{
 				AdvancedClusters: &atlasmock.AdvancedClustersClientMock{
 					GetFunc: func(projectID string, clusterName string) (*mongodbatlas.AdvancedCluster, *mongodbatlas.Response, error) {
@@ -589,7 +589,7 @@ func TestServerlessInstanceReconciliation(t *testing.T) {
 	orgID := "0987654321"
 	logger := zaptest.NewLogger(t).Sugar()
 	atlasProvider := &atlasmock.TestProvider{
-		SdkClientFunc: func(secretRef *client.ObjectKey, log *zap.SugaredLogger) (*admin.APIClient, string, error) {
+		SdkClientFunc: func(secretRef *client.ObjectKey, log *zap.SugaredLogger, _ bool) (*admin.APIClient, string, error) {
 			err := &admin.GenericOpenAPIError{}
 			err.SetModel(admin.ApiError{ErrorCode: pointer.MakePtr(atlas.ServerlessInstanceFromClusterAPI)})
 			clusterAPI := mockadmin.NewClustersApi(t)
@@ -633,7 +633,7 @@ func TestServerlessInstanceReconciliation(t *testing.T) {
 				ServerlessPrivateEndpointsApi: speClient,
 			}, orgID, nil
 		},
-		ClientFunc: func(secretRef *client.ObjectKey, log *zap.SugaredLogger) (*mongodbatlas.Client, string, error) {
+		ClientFunc: func(secretRef *client.ObjectKey, log *zap.SugaredLogger, _ bool) (*mongodbatlas.Client, string, error) {
 			return &mongodbatlas.Client{}, orgID, nil
 		},
 		IsCloudGovFunc: func() bool {
@@ -758,7 +758,7 @@ func TestDeletionReconciliation(t *testing.T) {
 	orgID := "0987654321"
 	logger := zaptest.NewLogger(t).Sugar()
 	atlasProvider := &atlasmock.TestProvider{
-		SdkClientFunc: func(secretRef *client.ObjectKey, log *zap.SugaredLogger) (*admin.APIClient, string, error) {
+		SdkClientFunc: func(secretRef *client.ObjectKey, log *zap.SugaredLogger, _ bool) (*admin.APIClient, string, error) {
 			clusterAPI := mockadmin.NewClustersApi(t)
 			clusterAPI.EXPECT().GetCluster(context.Background(), project.ID(), d.GetDeploymentName()).
 				Return(admin.GetClusterApiRequest{ApiService: clusterAPI})
@@ -801,7 +801,7 @@ func TestDeletionReconciliation(t *testing.T) {
 				ServerlessInstancesApi: mockadmin.NewServerlessInstancesApi(t),
 			}, orgID, nil
 		},
-		ClientFunc: func(secretRef *client.ObjectKey, log *zap.SugaredLogger) (*mongodbatlas.Client, string, error) {
+		ClientFunc: func(secretRef *client.ObjectKey, log *zap.SugaredLogger, _ bool) (*mongodbatlas.Client, string, error) {
 			return &mongodbatlas.Client{}, orgID, nil
 		},
 		IsCloudGovFunc: func() bool {

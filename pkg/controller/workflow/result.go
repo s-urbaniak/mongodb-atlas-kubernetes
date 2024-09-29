@@ -116,3 +116,7 @@ func (r Result) ReconcileResult() reconcile.Result {
 	}
 	return reconcile.Result{RequeueAfter: r.requeueAfter}
 }
+
+func (r Result) GetError() error {
+	return r.err
+}

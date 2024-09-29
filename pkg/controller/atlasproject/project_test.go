@@ -625,8 +625,8 @@ func TestHandleProject(t *testing.T) {
 				SdkClient: tt.atlasSDKMocker(),
 			}
 
-			result, err := reconciler.handleProject(ctx, "my-org-id", tt.project)
-			require.NoError(t, err)
+			result := reconciler.handleProject(ctx, "my-org-id", tt.project)
+			require.NoError(t, result.GetError())
 			assert.Equal(t, tt.result, result)
 			assert.True(
 				t,
@@ -777,8 +777,8 @@ func TestCreate(t *testing.T) {
 				Log:     logger,
 			}
 
-			result, err := reconciler.create(ctx, "my-org-id", tt.project)
-			require.NoError(t, err)
+			result := reconciler.create(ctx, "my-org-id", tt.project)
+			require.NoError(t, result.GetError())
 			assert.Equal(t, tt.result, result)
 			assert.True(
 				t,
@@ -1062,7 +1062,7 @@ func TestDelete(t *testing.T) {
 				ObjectDeletionProtection: tt.deletionProtection,
 				Log:                      logger,
 				AtlasProvider: &atlasmocks.TestProvider{
-					ClientFunc: func(secretRef *client.ObjectKey, log *zap.SugaredLogger) (*mongodbatlas.Client, string, error) {
+					ClientFunc: func(secretRef *client.ObjectKey, log *zap.SugaredLogger, _ bool) (*mongodbatlas.Client, string, error) {
 						return tt.atlasClientMocker(), "", nil
 					},
 				},
@@ -1077,8 +1077,8 @@ func TestDelete(t *testing.T) {
 			}
 
 			atlasProject := tt.objects[0].(*akov2.AtlasProject)
-			result, err := reconciler.delete(ctx, "my-org-id", atlasProject)
-			require.NoError(t, err)
+			result := reconciler.delete(ctx, "my-org-id", atlasProject)
+			require.NoError(t, result.GetError())
 			assert.Equal(t, tt.result, result)
 			assert.True(
 				t,

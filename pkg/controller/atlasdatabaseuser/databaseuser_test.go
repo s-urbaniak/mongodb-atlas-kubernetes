@@ -195,7 +195,7 @@ func TestHandleDatabaseUser(t *testing.T) {
 				IsSupportedFunc: func() bool {
 					return true
 				},
-				SdkClientFunc: func(secretRef *client.ObjectKey, log *zap.SugaredLogger) (*admin.APIClient, string, error) {
+				SdkClientFunc: func(secretRef *client.ObjectKey, log *zap.SugaredLogger, _ bool) (*admin.APIClient, string, error) {
 					return nil, "", errors.New("failed to create client")
 				},
 			},
@@ -257,7 +257,7 @@ func TestHandleDatabaseUser(t *testing.T) {
 				IsCloudGovFunc: func() bool {
 					return false
 				},
-				SdkClientFunc: func(secretRef *client.ObjectKey, log *zap.SugaredLogger) (*admin.APIClient, string, error) {
+				SdkClientFunc: func(secretRef *client.ObjectKey, log *zap.SugaredLogger, _ bool) (*admin.APIClient, string, error) {
 					userAPI := mockadmin.NewDatabaseUsersApi(t)
 					userAPI.EXPECT().GetDatabaseUser(context.Background(), "", "admin", "user1").
 						Return(admin.GetDatabaseUserApiRequest{ApiService: userAPI})

@@ -139,10 +139,10 @@ func TestRenconcile(t *testing.T) {
 					IsSupportedFunc: func() bool {
 						return true
 					},
-					ClientFunc: func(secretRef *client.ObjectKey, log *zap.SugaredLogger) (*mongodbatlas.Client, string, error) {
+					ClientFunc: func(secretRef *client.ObjectKey, log *zap.SugaredLogger, _ bool) (*mongodbatlas.Client, string, error) {
 						return tt.atlasClientMocker(), "", nil
 					},
-					SdkClientFunc: func(secretRef *client.ObjectKey, log *zap.SugaredLogger) (*admin.APIClient, string, error) {
+					SdkClientFunc: func(secretRef *client.ObjectKey, log *zap.SugaredLogger, _ bool) (*admin.APIClient, string, error) {
 						return tt.atlasSDKMocker(), "", nil
 					},
 				},

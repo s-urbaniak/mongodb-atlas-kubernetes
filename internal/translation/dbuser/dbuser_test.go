@@ -23,7 +23,7 @@ import (
 func TestNewAtlasDatabaseUsersService(t *testing.T) {
 	ctx := context.Background()
 	provider := &atlas.TestProvider{
-		SdkClientFunc: func(_ *client.ObjectKey, _ *zap.SugaredLogger) (*admin.APIClient, string, error) {
+		SdkClientFunc: func(_ *client.ObjectKey, _ *zap.SugaredLogger, _ bool) (*admin.APIClient, string, error) {
 			return &admin.APIClient{}, "", nil
 		},
 	}
@@ -38,7 +38,7 @@ func TestFailedNewAtlasDatabaseUsersService(t *testing.T) {
 	expectedErr := errors.New("fake error")
 	ctx := context.Background()
 	provider := &atlas.TestProvider{
-		SdkClientFunc: func(_ *client.ObjectKey, _ *zap.SugaredLogger) (*admin.APIClient, string, error) {
+		SdkClientFunc: func(_ *client.ObjectKey, _ *zap.SugaredLogger, _ bool) (*admin.APIClient, string, error) {
 			return nil, "", expectedErr
 		},
 	}
