@@ -22,7 +22,7 @@ const ConnectionSecretsEnsuredEvent = "ConnectionSecretsEnsured"
 func CreateOrUpdateConnectionSecrets(ctx *workflow.Context, k8sClient client.Client, ds deployment.AtlasDeploymentsService, recorder record.EventRecorder, project akov2.AtlasProject, dbUser akov2.AtlasDatabaseUser) workflow.Result {
 	conns, err := ds.ListDeploymentConnections(ctx.Context, project.ID())
 	if err != nil {
-		return workflow.Terminate(workflow.DatabaseUserConnectionSecretsNotCreated, err.Error())
+		return workflow.Terminate(workflow.DatabaseUserConnectionSecretsNotCreated, err)
 	}
 
 	// ensure secrets for both deployments and advanced deployment.
@@ -51,7 +51,7 @@ func createOrUpdateConnectionSecretsFromDeploymentSecrets(ctx *workflow.Context,
 		}
 		password, err := dbUser.ReadPassword(ctx.Context, k8sClient)
 		if err != nil {
-			return workflow.Terminate(workflow.DatabaseUserConnectionSecretsNotCreated, err.Error())
+			return workflow.Terminate(workflow.DatabaseUserConnectionSecretsNotCreated, err)
 		}
 		data := ConnectionData{
 			DBUserName: dbUser.Spec.Username,
@@ -63,7 +63,7 @@ func createOrUpdateConnectionSecretsFromDeploymentSecrets(ctx *workflow.Context,
 
 		var secretName string
 		if secretName, err = Ensure(ctx.Context, k8sClient, dbUser.Namespace, project.Spec.Name, project.ID(), di.Name, data); err != nil {
-			return workflow.Terminate(workflow.DatabaseUserConnectionSecretsNotCreated, err.Error())
+			return workflow.Terminate(workflow.DatabaseUserConnectionSecretsNotCreated, err)
 		}
 		secrets = append(secrets, secretName)
 		ctx.Log.Debugw("Ensured connection Secret up-to-date", "secretname", secretName)
@@ -74,7 +74,7 @@ func createOrUpdateConnectionSecretsFromDeploymentSecrets(ctx *workflow.Context,
 	}
 
 	if err := cleanupStaleSecrets(ctx, k8sClient, project.ID(), dbUser); err != nil {
-		return workflow.Terminate(workflow.DatabaseUserStaleConnectionSecrets, err.Error())
+		return workflow.Terminate(workflow.DatabaseUserStaleConnectionSecrets, err)
 	}
 
 	if requeue {

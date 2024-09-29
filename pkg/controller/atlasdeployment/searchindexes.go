@@ -134,11 +134,7 @@ func (sr *searchIndexesReconciler) Reconcile() workflow.Result {
 
 func (sr *searchIndexesReconciler) terminate(reason workflow.ConditionReason, err error) workflow.Result {
 	sr.ctx.Log.Error(err)
-	var errMsg string
-	if err != nil {
-		errMsg = err.Error()
-	}
-	result := workflow.Terminate(reason, errMsg)
+	result := workflow.Terminate(reason, err)
 	sr.ctx.SetConditionFromResult(api.SearchIndexesReadyType, result)
 	return result
 }

@@ -51,7 +51,7 @@ func ValidateResourceVersion(ctx *workflow.Context, resource api.AtlasCustomReso
 	valid, err := ResourceVersionIsValid(resource)
 	if err != nil {
 		log.Debugf("resource version for '%s' is invalid", resource.GetName())
-		result := workflow.Terminate(workflow.AtlasResourceVersionIsInvalid, err.Error())
+		result := workflow.Terminate(workflow.AtlasResourceVersionIsInvalid, err)
 		ctx.SetConditionFromResult(api.ResourceVersionStatus, result)
 		return result
 	}
@@ -59,7 +59,7 @@ func ValidateResourceVersion(ctx *workflow.Context, resource api.AtlasCustomReso
 	if !valid {
 		log.Debugf("resource '%s' version mismatch", resource.GetName())
 		result := workflow.Terminate(workflow.AtlasResourceVersionMismatch,
-			fmt.Sprintf("version of the resource '%s' is higher than the operator version '%s'. ",
+			fmt.Errorf("version of the resource '%s' is higher than the operator version '%s'. ",
 				resource.GetName(),
 				version.Version))
 		ctx.SetConditionFromResult(api.ResourceVersionStatus, result)

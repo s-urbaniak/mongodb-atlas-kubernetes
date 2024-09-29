@@ -1,6 +1,7 @@
 package atlasproject
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -34,14 +35,14 @@ func (r *AtlasProjectReconciler) ensureIntegration(workflowCtx *workflow.Context
 func (r *AtlasProjectReconciler) createOrDeleteIntegrations(ctx *workflow.Context, projectID string, project *akov2.AtlasProject) workflow.Result {
 	integrationsInAtlas, err := fetchIntegrations(ctx, projectID)
 	if err != nil {
-		return workflow.Terminate(workflow.ProjectIntegrationInternal, err.Error())
+		return workflow.Terminate(workflow.ProjectIntegrationInternal, err)
 	}
 	integrationsInAtlasAlias := toAliasThirdPartyIntegration(integrationsInAtlas.Results)
 
 	identifiersForDelete := set.Difference(integrationsInAtlasAlias, project.Spec.Integrations)
 	ctx.Log.Debugf("identifiersForDelete: %v", identifiersForDelete)
 	if err := deleteIntegrationsFromAtlas(ctx, projectID, identifiersForDelete); err != nil {
-		return workflow.Terminate(workflow.ProjectIntegrationInternal, err.Error())
+		return workflow.Terminate(workflow.ProjectIntegrationInternal, err)
 	}
 
 	integrationsToUpdate := set.Intersection(integrationsInAtlasAlias, project.Spec.Integrations)
@@ -79,13 +80,13 @@ func (r *AtlasProjectReconciler) updateIntegrationsAtlas(ctx *workflow.Context, 
 		kubeIntegration, err := item[1].(project.Integration).ToAtlas(ctx.Context, r.Client, namespace)
 		if kubeIntegration == nil {
 			ctx.Log.Warnw("Update Integrations", "Can not convert kube integration", err)
-			return workflow.Terminate(workflow.ProjectIntegrationInternal, "Update Integrations: Can not convert kube integration")
+			return workflow.Terminate(workflow.ProjectIntegrationInternal, errors.New("Update Integrations: Can not convert kube integration"))
 		}
 		specIntegration := (*aliasThirdPartyIntegration)(kubeIntegration)
 		if !areIntegrationsEqual(specIntegration, &atlasIntegration) {
 			ctx.Log.Debugf("Try to update integration: %s", kubeIntegration.Type)
 			if _, _, err := ctx.Client.Integrations.Replace(ctx.Context, projectID, kubeIntegration.Type, kubeIntegration); err != nil {
-				return workflow.Terminate(workflow.ProjectIntegrationRequest, fmt.Sprintf("Can not apply integration: %v", err))
+				return workflow.Terminate(workflow.ProjectIntegrationRequest, fmt.Errorf("Can not apply integration: %w", err))
 			}
 		}
 	}
@@ -106,7 +107,7 @@ func (r *AtlasProjectReconciler) createIntegrationsInAtlas(ctx *workflow.Context
 	for _, item := range integrations {
 		integration, err := item.(project.Integration).ToAtlas(ctx.Context, r.Client, namespace)
 		if err != nil || integration == nil {
-			return workflow.Terminate(workflow.ProjectIntegrationInternal, fmt.Sprintf("cannot convert integration: %s", err.Error()))
+			return workflow.Terminate(workflow.ProjectIntegrationInternal, fmt.Errorf("cannot convert integration: %w", err))
 		}
 
 		_, resp, err := ctx.Client.Integrations.Create(ctx.Context, projectID, integration.Type, integration)
@@ -114,7 +115,7 @@ func (r *AtlasProjectReconciler) createIntegrationsInAtlas(ctx *workflow.Context
 			ctx.Log.Debugw("Create request failed", "Status", resp.Status, "Integration", integration)
 		}
 		if err != nil {
-			return workflow.Terminate(workflow.ProjectIntegrationRequest, err.Error())
+			return workflow.Terminate(workflow.ProjectIntegrationRequest, err)
 		}
 	}
 	return workflow.OK()

@@ -1,6 +1,7 @@
 package atlasdatafederation
 
 import (
+	"errors"
 	"net/http"
 
 	"go.mongodb.org/atlas/mongodbatlas"
@@ -23,22 +24,22 @@ func (r *AtlasDataFederationReconciler) ensureDataFederation(ctx *workflow.Conte
 
 	dataFederationToAtlas, err := dataFederation.ToAtlas()
 	if err != nil {
-		return workflow.Terminate(workflow.Internal, "can not convert DataFederation (operator -> atlas)")
+		return workflow.Terminate(workflow.Internal, errors.New("can not convert DataFederation (operator -> atlas)"))
 	}
 
 	atlasSpec, resp, err := ctx.Client.DataFederation.Get(ctx.Context, projectID, operatorSpec.Name)
 	if err != nil {
 		if resp == nil {
-			return workflow.Terminate(workflow.Internal, err.Error())
+			return workflow.Terminate(workflow.Internal, err)
 		}
 
 		if resp.StatusCode != http.StatusNotFound {
-			return workflow.Terminate(workflow.DataFederationNotCreatedInAtlas, err.Error())
+			return workflow.Terminate(workflow.DataFederationNotCreatedInAtlas, err)
 		}
 
 		_, _, err = ctx.Client.DataFederation.Create(ctx.Context, projectID, dataFederationToAtlas)
 		if err != nil {
-			return workflow.Terminate(workflow.DataFederationNotCreatedInAtlas, err.Error())
+			return workflow.Terminate(workflow.DataFederationNotCreatedInAtlas, err)
 		}
 
 		return workflow.InProgress(workflow.DataFederationCreating, "Data Federation is being created")
@@ -46,7 +47,7 @@ func (r *AtlasDataFederationReconciler) ensureDataFederation(ctx *workflow.Conte
 
 	dfFromAtlas, err := DataFederationFromAtlas(atlasSpec)
 	if err != nil {
-		return workflow.Terminate(workflow.Internal, "can not convert DataFederation (atlas -> operator)")
+		return workflow.Terminate(workflow.Internal, errors.New("can not convert DataFederation (atlas -> operator)"))
 	}
 
 	if areEqual, _ := dataFederationEqual(*dfFromAtlas, *operatorSpec, log); areEqual {
@@ -55,7 +56,7 @@ func (r *AtlasDataFederationReconciler) ensureDataFederation(ctx *workflow.Conte
 
 	_, _, err = ctx.Client.DataFederation.Update(ctx.Context, projectID, dataFederation.Spec.Name, dataFederationToAtlas, nil)
 	if err != nil {
-		return workflow.Terminate(workflow.DataFederationNotUpdatedInAtlas, err.Error())
+		return workflow.Terminate(workflow.DataFederationNotUpdatedInAtlas, err)
 	}
 
 	return workflow.InProgress(workflow.DataFederationUpdating, "Data Federation is being updated")

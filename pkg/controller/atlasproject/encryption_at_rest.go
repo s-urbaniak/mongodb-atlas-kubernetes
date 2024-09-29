@@ -26,7 +26,7 @@ const (
 func (r *AtlasProjectReconciler) ensureEncryptionAtRest(workflowCtx *workflow.Context, project *akov2.AtlasProject) workflow.Result {
 	if err := readEncryptionAtRestSecrets(r.Client, workflowCtx, project.Spec.EncryptionAtRest, project.Namespace); err != nil {
 		workflowCtx.UnsetCondition(api.EncryptionAtRestReadyType)
-		return workflow.Terminate(workflow.ProjectEncryptionAtRestReady, err.Error())
+		return workflow.Terminate(workflow.ProjectEncryptionAtRestReady, err)
 	}
 
 	result := createOrDeleteEncryptionAtRests(workflowCtx, project.ID(), project)
@@ -143,12 +143,12 @@ func readSecretData(ctx context.Context, kubeClient client.Client, res common.Re
 func createOrDeleteEncryptionAtRests(ctx *workflow.Context, projectID string, project *akov2.AtlasProject) workflow.Result {
 	encryptionAtRestsInAtlas, err := fetchEncryptionAtRests(ctx, projectID)
 	if err != nil {
-		return workflow.Terminate(workflow.Internal, err.Error())
+		return workflow.Terminate(workflow.Internal, err)
 	}
 
 	inSync, err := AtlasInSync(encryptionAtRestsInAtlas, project.Spec.EncryptionAtRest)
 	if err != nil {
-		return workflow.Terminate(workflow.Internal, err.Error())
+		return workflow.Terminate(workflow.Internal, err)
 	}
 
 	if inSync {
@@ -156,7 +156,7 @@ func createOrDeleteEncryptionAtRests(ctx *workflow.Context, projectID string, pr
 	}
 
 	if err := syncEncryptionAtRestsInAtlas(ctx, projectID, project); err != nil {
-		return workflow.Terminate(workflow.Internal, err.Error())
+		return workflow.Terminate(workflow.Internal, err)
 	}
 
 	return workflow.OK()

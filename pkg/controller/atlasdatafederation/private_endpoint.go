@@ -35,7 +35,7 @@ func syncPrivateEndpointsWithAtlas(ctx *workflow.Context, clientDF *DataFederati
 	for _, e := range endpointsToCreate {
 		endpoint := e.(akov2.DataFederationPE)
 		if _, _, err := clientDF.CreateOnePrivateEndpoint(ctx.Context, projectID, endpoint); err != nil {
-			return workflow.Terminate(workflow.Internal, err.Error())
+			return workflow.Terminate(workflow.Internal, err)
 		}
 	}
 
@@ -44,7 +44,7 @@ func syncPrivateEndpointsWithAtlas(ctx *workflow.Context, clientDF *DataFederati
 	for _, item := range endpointsToDelete {
 		endpoint := item.(akov2.DataFederationPE)
 		if _, _, err := clientDF.DeleteOnePrivateEndpoint(ctx.Context, projectID, endpoint.EndpointID); err != nil {
-			return workflow.Terminate(workflow.Internal, err.Error())
+			return workflow.Terminate(workflow.Internal, err)
 		}
 	}
 

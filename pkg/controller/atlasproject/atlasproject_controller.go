@@ -18,6 +18,7 @@ package atlasproject
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"go.uber.org/zap"
@@ -78,6 +79,10 @@ type AtlasProjectReconciler struct {
 // +kubebuilder:rbac:groups=atlas.mongodb.com,namespace=default,resources=atlasteams,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=atlas.mongodb.com,namespace=default,resources=atlasteams/status,verbs=get;update;patch
 
+func (r *AtlasProjectReconciler) DryRun(ctx context.Context, object client.Object) error {
+	return nil
+}
+
 func (r *AtlasProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.With("atlasproject", req.NamespacedName)
 
@@ -92,7 +97,7 @@ func (r *AtlasProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		if !atlasProject.GetDeletionTimestamp().IsZero() {
 			err := customresource.ManageFinalizer(ctx, r.Client, atlasProject, customresource.UnsetFinalizer)
 			if err != nil {
-				result = workflow.Terminate(workflow.Internal, err.Error())
+				result = workflow.Terminate(workflow.Internal, err)
 				log.Errorw("Failed to remove finalizer", "error", err)
 				return result.ReconcileResult(), nil
 			}
@@ -116,14 +121,14 @@ func (r *AtlasProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	if err := validate.Project(atlasProject, r.AtlasProvider.IsCloudGov()); err != nil {
-		result := workflow.Terminate(workflow.Internal, err.Error())
+		result := workflow.Terminate(workflow.Internal, err)
 		setCondition(workflowCtx, api.ValidationSucceeded, result)
 		return result.ReconcileResult(), nil
 	}
 	workflowCtx.SetConditionTrue(api.ValidationSucceeded)
 
 	if !r.AtlasProvider.IsResourceSupported(atlasProject) {
-		result := workflow.Terminate(workflow.AtlasGovUnsupported, "the AtlasProject is not supported by Atlas for government").
+		result := workflow.Terminate(workflow.AtlasGovUnsupported, errors.New("the AtlasProject is not supported by Atlas for government")).
 			WithoutRetry()
 		setCondition(workflowCtx, api.ProjectReadyType, result)
 		return result.ReconcileResult(), nil
@@ -131,7 +136,7 @@ func (r *AtlasProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	atlasSdkClient, orgID, err := r.AtlasProvider.SdkClient(workflowCtx.Context, atlasProject.ConnectionSecretObjectKey(), log)
 	if err != nil {
-		result := workflow.Terminate(workflow.AtlasAPIAccessNotConfigured, err.Error())
+		result := workflow.Terminate(workflow.AtlasAPIAccessNotConfigured, err)
 		setCondition(workflowCtx, api.ProjectReadyType, result)
 		return result.ReconcileResult(), nil
 	}
@@ -140,7 +145,7 @@ func (r *AtlasProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	atlasClient, _, err := r.AtlasProvider.Client(workflowCtx.Context, atlasProject.ConnectionSecretObjectKey(), log)
 	if err != nil {
-		result := workflow.Terminate(workflow.AtlasAPIAccessNotConfigured, err.Error())
+		result := workflow.Terminate(workflow.AtlasAPIAccessNotConfigured, err)
 		setCondition(workflowCtx, api.ProjectReadyType, result)
 		return result.ReconcileResult(), nil
 	}

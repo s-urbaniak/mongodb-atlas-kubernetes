@@ -2,6 +2,7 @@ package atlasdeployment
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api"
@@ -34,17 +35,17 @@ func syncCustomZoneMapping(service *workflow.Context, groupID string, deployment
 	logger := service.Log
 	err := verifyZoneMapping(customZoneMappings)
 	if err != nil {
-		return workflow.Terminate(workflow.CustomZoneMappingReady, err.Error())
+		return workflow.Terminate(workflow.CustomZoneMappingReady, err)
 	}
 	_, existingZoneMapping, err := GetGlobalDeploymentState(service.Context, service.Client.GlobalClusters, groupID, deploymentName)
 	if err != nil {
-		return workflow.Terminate(workflow.CustomZoneMappingReady, fmt.Sprintf("Failed to get zone mapping state: %v", err))
+		return workflow.Terminate(workflow.CustomZoneMappingReady, fmt.Errorf("Failed to get zone mapping state: %v", err))
 	}
 	logger.Debugf("Existing zone mapping: %v", existingZoneMapping)
 	var customZoneMappingStatus status.CustomZoneMapping
 	zoneMappingMap, err := getZoneMappingMap(service.Context, service.Client, groupID, deploymentName)
 	if err != nil {
-		return workflow.Terminate(workflow.CustomZoneMappingReady, fmt.Sprintf("Failed to get zone mapping map: %v", err))
+		return workflow.Terminate(workflow.CustomZoneMappingReady, fmt.Errorf("Failed to get zone mapping map: %v", err))
 	}
 
 	if shouldAdd, shouldDelete := compareZoneMappingStates(existingZoneMapping, customZoneMappings, zoneMappingMap); shouldDelete || shouldAdd {
@@ -114,7 +115,7 @@ func createZoneMapping(ctx context.Context, client mongodbatlas.GlobalClustersSe
 
 func checkCustomZoneMapping(customZoneMapping status.CustomZoneMapping) workflow.Result {
 	if customZoneMapping.ZoneMappingState != status.StatusReady {
-		return workflow.Terminate(workflow.CustomZoneMappingReady, "Zone mapping is not ready")
+		return workflow.Terminate(workflow.CustomZoneMappingReady, errors.New("Zone mapping is not ready"))
 	}
 	return workflow.OK()
 }

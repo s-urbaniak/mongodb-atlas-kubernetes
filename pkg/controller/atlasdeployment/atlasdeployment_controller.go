@@ -101,7 +101,7 @@ func (r *AtlasDeploymentReconciler) Reconcile(context context.Context, req ctrl.
 		if !atlasDeployment.GetDeletionTimestamp().IsZero() {
 			err := r.removeDeletionFinalizer(context, atlasDeployment)
 			if err != nil {
-				result = workflow.Terminate(workflow.Internal, err.Error())
+				result = workflow.Terminate(workflow.Internal, err)
 				log.Errorw("failed to remove finalizer", "error", err)
 				return result.ReconcileResult(), nil
 			}
@@ -129,14 +129,14 @@ func (r *AtlasDeploymentReconciler) Reconcile(context context.Context, req ctrl.
 	}
 
 	if err := validate.AtlasDeployment(atlasDeployment, r.AtlasProvider.IsCloudGov(), project.Spec.RegionUsageRestrictions); err != nil {
-		result = workflow.Terminate(workflow.Internal, err.Error())
+		result = workflow.Terminate(workflow.Internal, err)
 		ctx.SetConditionFromResult(api.ValidationSucceeded, result)
 		return result.ReconcileResult(), nil
 	}
 	ctx.SetConditionTrue(api.ValidationSucceeded)
 
 	if !r.AtlasProvider.IsResourceSupported(atlasDeployment) {
-		result = workflow.Terminate(workflow.AtlasGovUnsupported, "the AtlasDeployment is not supported by Atlas for government").
+		result = workflow.Terminate(workflow.AtlasGovUnsupported, errors.New("the AtlasDeployment is not supported by Atlas for government")).
 			WithoutRetry()
 		ctx.SetConditionFromResult(api.DeploymentReadyType, result)
 		return result.ReconcileResult(), nil
@@ -144,7 +144,7 @@ func (r *AtlasDeploymentReconciler) Reconcile(context context.Context, req ctrl.
 
 	atlasClient, orgID, err := r.AtlasProvider.Client(ctx.Context, project.ConnectionSecretObjectKey(), log)
 	if err != nil {
-		result = workflow.Terminate(workflow.AtlasAPIAccessNotConfigured, err.Error())
+		result = workflow.Terminate(workflow.AtlasAPIAccessNotConfigured, err)
 		ctx.SetConditionFromResult(api.DeploymentReadyType, result)
 		return result.ReconcileResult(), nil
 	}
@@ -153,7 +153,7 @@ func (r *AtlasDeploymentReconciler) Reconcile(context context.Context, req ctrl.
 
 	atlasSdkClient, _, err := r.AtlasProvider.SdkClient(ctx.Context, project.ConnectionSecretObjectKey(), log)
 	if err != nil {
-		result := workflow.Terminate(workflow.AtlasAPIAccessNotConfigured, err.Error())
+		result := workflow.Terminate(workflow.AtlasAPIAccessNotConfigured, err)
 		ctx.SetConditionFromResult(api.DeploymentReadyType, result)
 		return result.ReconcileResult(), nil
 	}
@@ -272,7 +272,7 @@ func (r *AtlasDeploymentReconciler) deleteConnectionStrings(ctx *workflow.Contex
 
 func (r *AtlasDeploymentReconciler) readProjectResource(ctx context.Context, deployment *akov2.AtlasDeployment, project *akov2.AtlasProject) workflow.Result {
 	if err := r.Client.Get(ctx, deployment.AtlasProjectObjectKey(), project); err != nil {
-		return workflow.Terminate(workflow.Internal, err.Error())
+		return workflow.Terminate(workflow.Internal, err)
 	}
 	return workflow.OK()
 }
@@ -330,7 +330,7 @@ func (r *AtlasDeploymentReconciler) transitionFromResult(ctx *workflow.Context, 
 
 func (r *AtlasDeploymentReconciler) terminate(ctx *workflow.Context, errorCondition workflow.ConditionReason, err error) (ctrl.Result, error) {
 	r.Log.Error(err)
-	terminated := workflow.Terminate(errorCondition, err.Error())
+	terminated := workflow.Terminate(errorCondition, err)
 	ctx.SetConditionFromResult(api.DeploymentReadyType, terminated)
 
 	return terminated.ReconcileResult(), nil

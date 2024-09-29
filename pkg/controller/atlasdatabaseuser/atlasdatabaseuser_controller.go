@@ -136,7 +136,7 @@ func (r *AtlasDatabaseUserReconciler) terminate(
 	err error,
 ) ctrl.Result {
 	r.Log.Errorf("resource %T(%s/%s) failed on condition %s: %s", object, object.GetNamespace(), object.GetName(), condition, err)
-	result := workflow.Terminate(reason, err.Error())
+	result := workflow.Terminate(reason, err)
 	ctx.SetConditionFromResult(condition, result)
 
 	if !retry {
