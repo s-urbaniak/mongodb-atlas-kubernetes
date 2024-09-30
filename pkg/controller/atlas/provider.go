@@ -30,8 +30,8 @@ const (
 )
 
 type Provider interface {
-	Client(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger, dryRun bool) (*mongodbatlas.Client, string, error)
-	SdkClient(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger, dryRun bool) (*admin.APIClient, string, error)
+	Client(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger, dryRun bool, recorder dryrun.Recorder) (*mongodbatlas.Client, string, error)
+	SdkClient(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger, dryRun bool, recorder dryrun.Recorder) (*admin.APIClient, string, error)
 	IsCloudGov() bool
 	IsResourceSupported(resource api.AtlasCustomResource) bool
 }
@@ -94,7 +94,7 @@ func (p *ProductionProvider) IsResourceSupported(resource api.AtlasCustomResourc
 	return false
 }
 
-func (p *ProductionProvider) Client(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger, dryRun bool) (*mongodbatlas.Client, string, error) {
+func (p *ProductionProvider) Client(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger, dryRun bool, recorder dryrun.Recorder) (*mongodbatlas.Client, string, error) {
 	secretData, err := getSecrets(ctx, p.k8sClient, secretRef, &p.globalSecretRef)
 	if err != nil {
 		return nil, "", err
@@ -103,7 +103,7 @@ func (p *ProductionProvider) Client(ctx context.Context, secretRef *client.Objec
 	var transport = http.DefaultTransport
 	if dryRun {
 		transport = &DryRunTransport{
-			Recorder: &dryrun.SimpleRecorder{},
+			Recorder: recorder,
 			Delegate: transport,
 		}
 	}
@@ -122,7 +122,7 @@ func (p *ProductionProvider) Client(ctx context.Context, secretRef *client.Objec
 	return c, secretData.OrgID, err
 }
 
-func (p *ProductionProvider) SdkClient(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger, dryRun bool) (*admin.APIClient, string, error) {
+func (p *ProductionProvider) SdkClient(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger, dryRun bool, recorder dryrun.Recorder) (*admin.APIClient, string, error) {
 	secretData, err := getSecrets(ctx, p.k8sClient, secretRef, &p.globalSecretRef)
 	if err != nil {
 		return nil, "", err
@@ -135,7 +135,7 @@ func (p *ProductionProvider) SdkClient(ctx context.Context, secretRef *client.Ob
 	//	return nil, "", err
 	//}
 
-	c, err := NewClient(p.domain, secretData.PublicKey, secretData.PrivateKey, dryRun)
+	c, err := NewClient(p.domain, secretData.PublicKey, secretData.PrivateKey, dryRun, recorder)
 	if err != nil {
 		return nil, "", err
 	}

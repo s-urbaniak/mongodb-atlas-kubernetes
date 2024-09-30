@@ -142,7 +142,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(k8sClient).ToNot(BeNil())
 
-		atlasClient, err = atlas.NewClient(atlasDomain, publicKey, privateKey, false)
+		atlasClient, err = atlas.NewClient(atlasDomain, publicKey, privateKey, false, nil)
 		Expect(err).ToNot(HaveOccurred())
 		defaultTimeouts()
 	})

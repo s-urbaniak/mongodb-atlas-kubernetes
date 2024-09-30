@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/dryrun"
 
 	"go.uber.org/zap"
@@ -80,8 +82,8 @@ type AtlasProjectReconciler struct {
 // +kubebuilder:rbac:groups=atlas.mongodb.com,namespace=default,resources=atlasteams,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=atlas.mongodb.com,namespace=default,resources=atlasteams/status,verbs=get;update;patch
 
-func (r *AtlasProjectReconciler) DryRun(ctx context.Context, object client.Object) error {
-	log := r.Log.With("atlasproject", "dry-run", object.GetName())
+func (r *AtlasProjectReconciler) DryRun(ctx context.Context, object runtime.Object, recorder dryrun.Recorder) error {
+	log := r.Log.With("atlasproject", "dry-run")
 
 	req, ok := object.(*akov2.AtlasProject)
 	if !ok {
@@ -93,18 +95,19 @@ func (r *AtlasProjectReconciler) DryRun(ctx context.Context, object client.Objec
 		Namespace: req.Namespace,
 		Name:      req.Name,
 	}, obj)
+	if apierrors.IsNotFound(err) {
+		obj = req
+		err = nil
+	}
 	if err != nil {
 		return err
 	}
+
 	obj.Spec = req.Spec
 
 	conditions := akov2.InitCondition(obj, api.FalseCondition(api.ReadyType))
 	workflowCtx := workflow.NewContext(log, conditions, ctx)
-	_, err = r.reconcile(workflowCtx, log, true, obj)
-	if errors.Is(err, dryrun.ErrDryRun) {
-		return nil
-	}
-	return err
+	return r.reconcile(workflowCtx, log, obj, true, recorder).GetError()
 }
 
 func (r *AtlasProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -138,20 +141,20 @@ func (r *AtlasProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		statushandler.Update(workflowCtx, r.Client, r.EventRecorder, atlasProject)
 	}()
 
-	return r.reconcile(workflowCtx, log, false, atlasProject)
+	return r.reconcile(workflowCtx, log, atlasProject, false, nil).ReconcileResult(), nil
 }
 
-func (r *AtlasProjectReconciler) reconcile(workflowCtx *workflow.Context, log *zap.SugaredLogger, dryRun bool, atlasProject *akov2.AtlasProject) (ctrl.Result, error) {
+func (r *AtlasProjectReconciler) reconcile(workflowCtx *workflow.Context, log *zap.SugaredLogger, atlasProject *akov2.AtlasProject, dryRun bool, recorder dryrun.Recorder) workflow.Result {
 	resourceVersionIsValid := customresource.ValidateResourceVersion(workflowCtx, atlasProject, r.Log)
 	if !resourceVersionIsValid.IsOk() {
 		r.Log.Debugf("project validation result: %v", resourceVersionIsValid)
-		return resourceVersionIsValid.ReconcileResult(), nil
+		return resourceVersionIsValid
 	}
 
 	if err := validate.Project(atlasProject, r.AtlasProvider.IsCloudGov()); err != nil {
 		result := workflow.Terminate(workflow.Internal, err)
 		setCondition(workflowCtx, api.ValidationSucceeded, result)
-		return result.ReconcileResult(), nil
+		return result
 	}
 	workflowCtx.SetConditionTrue(api.ValidationSucceeded)
 
@@ -159,38 +162,38 @@ func (r *AtlasProjectReconciler) reconcile(workflowCtx *workflow.Context, log *z
 		result := workflow.Terminate(workflow.AtlasGovUnsupported, errors.New("the AtlasProject is not supported by Atlas for government")).
 			WithoutRetry()
 		setCondition(workflowCtx, api.ProjectReadyType, result)
-		return result.ReconcileResult(), nil
+		return result
 	}
 
-	atlasSdkClient, orgID, err := r.AtlasProvider.SdkClient(workflowCtx.Context, atlasProject.ConnectionSecretObjectKey(), log, dryRun)
+	atlasSdkClient, orgID, err := r.AtlasProvider.SdkClient(workflowCtx.Context, atlasProject.ConnectionSecretObjectKey(), log, dryRun, recorder)
 	if err != nil {
 		result := workflow.Terminate(workflow.AtlasAPIAccessNotConfigured, err)
 		setCondition(workflowCtx, api.ProjectReadyType, result)
-		return result.ReconcileResult(), nil
+		return result
 	}
 	workflowCtx.SdkClient = atlasSdkClient
 	r.projectService = project.NewProjectAPIService(atlasSdkClient.ProjectsApi)
 
-	atlasClient, _, err := r.AtlasProvider.Client(workflowCtx.Context, atlasProject.ConnectionSecretObjectKey(), log, dryRun)
+	atlasClient, _, err := r.AtlasProvider.Client(workflowCtx.Context, atlasProject.ConnectionSecretObjectKey(), log, dryRun, recorder)
 	if err != nil {
 		result := workflow.Terminate(workflow.AtlasAPIAccessNotConfigured, err)
 		setCondition(workflowCtx, api.ProjectReadyType, result)
-		return result.ReconcileResult(), nil
+		return result
 	}
 	workflowCtx.OrgID = orgID
 	workflowCtx.Client = atlasClient
 
 	projectResult := r.handleProject(workflowCtx, orgID, atlasProject)
 	if !projectResult.IsOk() {
-		return projectResult.ReconcileResult(), nil
+		return projectResult
 	}
 
 	err = customresource.ApplyLastConfigApplied(workflowCtx.Context, atlasProject, r.Client)
 	if err != nil {
-		return r.terminate(workflowCtx, workflow.Internal, err).ReconcileResult(), nil
+		return r.terminate(workflowCtx, workflow.Internal, err)
 	}
 
-	return projectResult.ReconcileResult(), nil
+	return projectResult
 }
 
 // ensureProjectResources ensures IP Access List, Private Endpoints, Integrations, Maintenance Window and Encryption at Rest

@@ -104,7 +104,7 @@ var _ = BeforeSuite(func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(k8sClient).ToNot(BeNil())
 
-		atlasClient, err = atlas.NewClient(atlasDomain, publicKey, privateKey, false)
+		atlasClient, err = atlas.NewClient(atlasDomain, publicKey, privateKey, false, nil)
 		Expect(err).ToNot(HaveOccurred())
 	})
 

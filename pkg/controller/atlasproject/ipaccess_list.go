@@ -4,8 +4,6 @@ import (
 	"errors"
 	"reflect"
 
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/dryrun"
-
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/translation/ipaccesslist"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api"
 	akov2 "github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1"
@@ -49,9 +47,6 @@ func (i *ipAccessListController) reconcile() workflow.Result {
 // configure update Atlas with new ip access list
 func (i *ipAccessListController) configure(current, desired ipaccesslist.IPAccessEntries, isUnset bool) workflow.Result {
 	err := i.service.Add(i.ctx.Context, i.project.ID(), desired.GetByStatus(false))
-	if errors.Is(err, dryrun.ErrDryRun) {
-
-	}
 	if err != nil {
 		return i.terminate(workflow.ProjectIPNotCreatedInAtlas, err)
 	}

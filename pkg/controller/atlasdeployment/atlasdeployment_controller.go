@@ -142,7 +142,7 @@ func (r *AtlasDeploymentReconciler) Reconcile(context context.Context, req ctrl.
 		return result.ReconcileResult(), nil
 	}
 
-	atlasClient, orgID, err := r.AtlasProvider.Client(ctx.Context, project.ConnectionSecretObjectKey(), log, true)
+	atlasClient, orgID, err := r.AtlasProvider.Client(ctx.Context, project.ConnectionSecretObjectKey(), log, true, nil)
 	if err != nil {
 		result = workflow.Terminate(workflow.AtlasAPIAccessNotConfigured, err)
 		ctx.SetConditionFromResult(api.DeploymentReadyType, result)
@@ -151,7 +151,7 @@ func (r *AtlasDeploymentReconciler) Reconcile(context context.Context, req ctrl.
 	ctx.OrgID = orgID
 	ctx.Client = atlasClient
 
-	atlasSdkClient, _, err := r.AtlasProvider.SdkClient(ctx.Context, project.ConnectionSecretObjectKey(), log, true)
+	atlasSdkClient, _, err := r.AtlasProvider.SdkClient(ctx.Context, project.ConnectionSecretObjectKey(), log, true, nil)
 	if err != nil {
 		result := workflow.Terminate(workflow.AtlasAPIAccessNotConfigured, err)
 		ctx.SetConditionFromResult(api.DeploymentReadyType, result)

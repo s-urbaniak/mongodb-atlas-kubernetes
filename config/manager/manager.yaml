@@ -23,11 +23,14 @@ spec:
           args:
             - "--leader-elect"
             - "--health-probe-bind-address=:8081"
-            - "--metrics-bind-address=127.0.0.1:8080"
+            - "--metrics-bind-address=:8080"
             - "--log-level=info"
             - "--log-encoder=json"
           image: controller:latest
           name: manager
+          ports:
+          - containerPort: 8080
+            name: dry-run
           securityContext:
             allowPrivilegeEscalation: false
           livenessProbe:
@@ -42,7 +45,7 @@ spec:
               port: 8081
             initialDelaySeconds: 5
             periodSeconds: 10
-          imagePullPolicy: Always
+          imagePullPolicy: Never
           resources:
             limits:
               memory: 1Gi
@@ -59,3 +62,18 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
       terminationGracePeriodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-atlas-operator
+  namespace: mongodb-atlas-operator
+spec:
+  ports:
+    - name: dry-run
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+  selector:
+  sessionAffinity: None
+  type: ClusterIP

@@ -30,7 +30,7 @@ func AClient() (Atlas, error) {
 		Private: os.Getenv("MCLI_PRIVATE_API_KEY"),
 	}
 
-	c, err := atlas.NewClient(os.Getenv("MCLI_OPS_MANAGER_URL"), a.Public, a.Private, false)
+	c, err := atlas.NewClient(os.Getenv("MCLI_OPS_MANAGER_URL"), a.Public, a.Private, false, nil)
 	a.Client = c
 
 	return a, err

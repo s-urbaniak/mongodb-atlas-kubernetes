@@ -48,7 +48,7 @@ func (r *AtlasDatabaseUserReconciler) handleDatabaseUser(ctx *workflow.Context, 
 		return r.terminate(ctx, atlasDatabaseUser, api.DatabaseUserReadyType, workflow.Internal, true, err)
 	}
 
-	sdkClient, _, err := r.AtlasProvider.SdkClient(ctx.Context, atlasProject.ConnectionSecretObjectKey(), r.Log, true)
+	sdkClient, _, err := r.AtlasProvider.SdkClient(ctx.Context, atlasProject.ConnectionSecretObjectKey(), r.Log, true, nil)
 	if err != nil {
 		return r.terminate(ctx, atlasDatabaseUser, api.DatabaseUserReadyType, workflow.AtlasAPIAccessNotConfigured, true, err)
 	}

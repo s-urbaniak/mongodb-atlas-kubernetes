@@ -2,29 +2,45 @@ package dryrun
 
 import (
 	"fmt"
-
-	"k8s.io/apimachinery/pkg/runtime"
+	"sync"
 )
 
 type Recorder interface {
-	Record(object runtime.Object, reason, message string)
-	Recordf(object runtime.Object, reason, messageFmt string, args ...interface{})
+	Record(action, message string)
+	Recordf(action, messageFmt string, args ...interface{})
 }
 
-type SimpleRecorder struct{}
-
-func (r *SimpleRecorder) Record(object runtime.Object, reason, message string) {
-	fmt.Println("#######")
-	fmt.Println("object", object)
-	fmt.Println("reason", reason)
-	fmt.Println("message", message)
-	fmt.Println("#######")
+type PlannedAction struct {
+	Action  string `json:"action,omitempty"`
+	Message string `json:"message,omitempty"`
 }
 
-func (r *SimpleRecorder) Recordf(object runtime.Object, reason, messageFmt string, args ...interface{}) {
-	fmt.Println("#######")
-	fmt.Println("object", object)
-	fmt.Println("reason", reason)
-	fmt.Printf(messageFmt+"\n", args...)
-	fmt.Println("#######")
+type SimpleRecorder struct {
+	mu             sync.RWMutex // protects fields below
+	plannedActions []PlannedAction
+}
+
+func (r *SimpleRecorder) Record(action, message string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.plannedActions = append(r.plannedActions, PlannedAction{action, message})
+}
+
+func (r *SimpleRecorder) Recordf(action, messageFmt string, args ...interface{}) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.plannedActions = append(r.plannedActions, PlannedAction{action, fmt.Sprintf(messageFmt, args...)})
+}
+
+func (r *SimpleRecorder) PlannedActions() []PlannedAction {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	result := make([]PlannedAction, 0, len(r.plannedActions))
+	for _, plannedAction := range r.plannedActions {
+		result = append(result, plannedAction)
+	}
+	return result
 }

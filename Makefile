@@ -179,7 +179,7 @@ bin/$(TARGET_OS)/$(TARGET_ARCH):
 
 bin/$(TARGET_OS)/$(TARGET_ARCH)/manager: $(GO_SOURCES) bin/$(TARGET_OS)/$(TARGET_ARCH)
 	@echo "Building operator with version $(VERSION); $(TARGET_OS) - $(TARGET_ARCH)"
-	CGO_ENABLED=0 GOOS=$(TARGET_OS) GOARCH=$(TARGET_ARCH) go build -o $@ -ldflags="-X github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/version.Version=$(VERSION)" cmd/manager/main.go
+	CGO_ENABLED=0 GOOS=$(TARGET_OS) GOARCH=$(TARGET_ARCH) go build -gcflags "all=-N -l" -o $@ -ldflags="-X github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/version.Version=$(VERSION)" cmd/manager/main.go
 	@touch $@
 
 bin/manager: bin/$(TARGET_OS)/$(TARGET_ARCH)/manager
@@ -270,7 +270,7 @@ image: ## Build the operator image
 	$(MAKE) bin/linux/amd64/manager TARGET_OS=linux TARGET_ARCH=amd64 VERSION=$(VERSION)
 	$(MAKE) bin/linux/arm64/manager TARGET_OS=linux TARGET_ARCH=arm64 VERSION=$(VERSION)
 	$(CONTAINER_ENGINE) build -f fast.Dockerfile --build-arg VERSION=$(VERSION) -t $(OPERATOR_IMAGE) .
-	$(CONTAINER_ENGINE) push $(OPERATOR_IMAGE)
+#	$(CONTAINER_ENGINE) push $(OPERATOR_IMAGE)
 
 .PHONY: bundle-build
 bundle-build: ## Build the bundle image.
@@ -487,13 +487,15 @@ install-credentials: set-namespace ## Install the Atlas credentials for the Oper
 prepare-run: generate vet manifests manager run-kind install-crds install-credentials
 
 .PHONY: run
-run: prepare-run ## Run a freshly compiled manager against kind
+run: #prepare-run ## Run a freshly compiled manager against kind
 ifdef RUN_YAML
 	kubectl apply -f $(RUN_YAML)
 endif
 	OPERATOR_POD_NAME=$(OPERATOR_POD_NAME) \
 	OPERATOR_NAMESPACE=$(OPERATOR_NAMESPACE) \
-	bin/manager --object-deletion-protection=false --log-level=$(RUN_LOG_LEVEL) \
+	dlv --listen=:2345 --headless=true --api-version=2 --accept-multiclient exec \
+	bin/manager -- \
+	--object-deletion-protection=false --log-level=$(RUN_LOG_LEVEL) \
 	--atlas-domain=$(ATLAS_DOMAIN) \
 	--global-api-secret-name=$(ATLAS_KEY_SECRET_NAME)
 

@@ -78,8 +78,6 @@ func (r *AtlasProjectReconciler) syncAssignedTeams(ctx *workflow.Context, projec
 		currentProjectsStatus[projectTeam.ID] = projectTeam
 	}
 
-	defer statushandler.Update(ctx, r.Client, r.EventRecorder, project)
-
 	toDelete := make([]*admin.TeamRole, 0, len(atlasAssignedTeams.GetResults()))
 
 	if atlasAssignedTeams != nil && atlasAssignedTeams.Results != nil {

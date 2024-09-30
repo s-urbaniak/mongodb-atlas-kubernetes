@@ -6,6 +6,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/dryrun"
+
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -304,6 +306,11 @@ func (b *Builder) Build(ctx context.Context) (manager.Manager, error) {
 	)
 	if err = bcpReconciler.SetupWithManager(mgr, b.skipNameValidation); err != nil {
 		return nil, fmt.Errorf("unable to create controller AtlasBackupCompliancePolicy: %w", err)
+	}
+
+	// TODO: we should set up our own mux, separate from controller-runtime
+	if err = mgr.AddMetricsServerExtraHandler("/dry-run", dryrun.NewDryRunHandler(projectReconciler, b.scheme)); err != nil {
+		return nil, err
 	}
 
 	return mgr, nil
