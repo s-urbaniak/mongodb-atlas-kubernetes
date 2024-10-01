@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/dryrun"
@@ -103,6 +104,7 @@ func (r *AtlasProjectReconciler) DryRun(ctx context.Context, object runtime.Obje
 		return err
 	}
 
+	obj.Annotations = req.Annotations
 	obj.Spec = req.Spec
 
 	conditions := akov2.InitCondition(obj, api.FalseCondition(api.ReadyType))

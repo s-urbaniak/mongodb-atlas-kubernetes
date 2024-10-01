@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	yaml "sigs.k8s.io/yaml/goyaml.v2"
 	"sync"
+
+	yaml "sigs.k8s.io/yaml/goyaml.v2"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"

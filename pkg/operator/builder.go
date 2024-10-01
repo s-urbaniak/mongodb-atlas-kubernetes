@@ -6,6 +6,8 @@ import (
 	"os"
 	"time"
 
+	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
+
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/dryrun"
 
 	"go.uber.org/zap"
@@ -176,8 +178,12 @@ func (b *Builder) Build(ctx context.Context) (manager.Manager, error) {
 	mgr, err := b.managerProvider.New(
 		b.config,
 		ctrl.Options{
-			Scheme:  b.scheme,
-			Metrics: metricsserver.Options{BindAddress: b.metricAddress},
+			Scheme: b.scheme,
+			Metrics: metricsserver.Options{
+				BindAddress:    b.metricAddress,
+				SecureServing:  true,
+				FilterProvider: filters.WithAuthenticationAndAuthorization,
+			},
 			WebhookServer: webhook.NewServer(webhook.Options{
 				Port: 9443,
 			}),

@@ -8,4 +8,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: quay.io/mongodb/mongodb-atlas-kubernetes-operator-prerelease
-  newTag: 2.4.0-127-g538eaa42-dirty
+  newTag: 2.4.0-128-g0203a5af-dirty
