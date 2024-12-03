@@ -6,7 +6,6 @@ import (
 
 	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 type Indexer interface {
@@ -18,9 +17,9 @@ type Indexer interface {
 // RegisterAll registers all known indexers to the given manager.
 // It uses the given logger to create a new named "indexer" logger,
 // passing that to each indexer.
-func RegisterAll(ctx context.Context, mgr manager.Manager, logger *zap.Logger) error {
+func RegisterAll(ctx context.Context, idx client.FieldIndexer, logger *zap.Logger) error {
 	logger = logger.Named("indexer")
-	return Register(ctx, mgr,
+	return Register(ctx, logger, idx,
 		NewAtlasBackupScheduleByBackupPolicyIndexer(logger),
 		NewAtlasDeploymentByBackupScheduleIndexer(logger),
 		NewAtlasDeploymentBySearchIndexIndexer(logger),
@@ -36,9 +35,13 @@ func RegisterAll(ctx context.Context, mgr manager.Manager, logger *zap.Logger) e
 }
 
 // Register registers the given indexers to the given manager's field indexer.
-func Register(ctx context.Context, mgr manager.Manager, indexers ...Indexer) error {
+func Register(ctx context.Context, logger *zap.Logger, idx client.FieldIndexer, indexers ...Indexer) error {
 	for _, indexer := range indexers {
-		err := mgr.GetFieldIndexer().IndexField(ctx, indexer.Object(), indexer.Name(), indexer.Keys)
+		logger.Info("registering",
+			zap.String("name", indexer.Name()),
+			zap.String("type", fmt.Sprintf("%T", indexer.Object())),
+		)
+		err := idx.IndexField(ctx, indexer.Object(), indexer.Name(), indexer.Keys)
 		if err != nil {
 			return fmt.Errorf("error registering indexer %q: %w", indexer.Name(), err)
 		}

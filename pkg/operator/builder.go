@@ -6,10 +6,6 @@ import (
 	"os"
 	"time"
 
-	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
-
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/dryrun"
-
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -21,10 +17,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	ctrzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/dryrun"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/featureflags"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/atlas"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/atlasbackupcompliancepolicy"
@@ -206,7 +204,7 @@ func (b *Builder) Build(ctx context.Context) (manager.Manager, error) {
 		return nil, err
 	}
 
-	if err = indexer.RegisterAll(ctx, mgr, b.logger); err != nil {
+	if err = indexer.RegisterAll(ctx, mgr.GetFieldIndexer(), b.logger); err != nil {
 		return nil, fmt.Errorf("unable to create indexers: %w", err)
 	}
 

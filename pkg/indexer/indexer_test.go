@@ -5,22 +5,15 @@ import (
 	"fmt"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/util/sets"
-
 	"go.uber.org/zap/zaptest"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 type managerMock struct {
-	manager.Manager
 	client.FieldIndexer
 
 	fields sets.Set[string]
-}
-
-func (m *managerMock) GetFieldIndexer() client.FieldIndexer {
-	return m
 }
 
 func (m *managerMock) IndexField(ctx context.Context, obj client.Object, field string, extractValue client.IndexerFunc) error {
