@@ -280,11 +280,7 @@ func (r *AtlasDatabaseUserReconciler) removeOldUser(ctx context.Context, project
 }
 
 func (r *AtlasDatabaseUserReconciler) getProjectFromAtlas(ctx *workflow.Context, atlasDatabaseUser *akov2.AtlasDatabaseUser) (*project.Project, error) {
-	sdkClient, _, err := r.AtlasProvider.SdkClient(
-		ctx.Context,
-		&client.ObjectKey{Namespace: atlasDatabaseUser.Namespace, Name: atlasDatabaseUser.Credentials().Name},
-		r.Log,
-	)
+	sdkClient, _, err := r.AtlasProvider.SdkClient(ctx.Context, &client.ObjectKey{Namespace: atlasDatabaseUser.Namespace, Name: atlasDatabaseUser.Credentials().Name}, r.Log, atlasDatabaseUser)
 	if err != nil {
 		return nil, err
 	}
@@ -312,7 +308,7 @@ func (r *AtlasDatabaseUserReconciler) getProjectFromKube(ctx *workflow.Context, 
 		return nil, err
 	}
 
-	sdkClient, orgID, err := r.AtlasProvider.SdkClient(ctx.Context, credentialsSecret, r.Log)
+	sdkClient, orgID, err := r.AtlasProvider.SdkClient(ctx.Context, credentialsSecret, r.Log, atlasDatabaseUser)
 	if err != nil {
 		return nil, err
 	}

@@ -189,19 +189,12 @@ func (r *AtlasDeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 }
 
 func (r *AtlasDeploymentReconciler) getProjectFromAtlas(ctx *workflow.Context, atlasDeployment *akov2.AtlasDeployment) (*project.Project, error) {
-	sdkClient, orgID, err := r.AtlasProvider.SdkClient(
-		ctx.Context,
-		&client.ObjectKey{Namespace: atlasDeployment.Namespace, Name: atlasDeployment.Credentials().Name},
-		r.Log,
-	)
+	sdkClient, orgID, err := r.AtlasProvider.SdkClient(ctx.Context, &client.ObjectKey{Namespace: atlasDeployment.Namespace, Name: atlasDeployment.Credentials().Name}, r.Log, atlasDeployment)
 	if err != nil {
 		return nil, err
 	}
 
-	sdkClientSet, _, err := r.AtlasProvider.SdkClientSet(
-		ctx.Context,
-		&client.ObjectKey{Namespace: atlasDeployment.Namespace, Name: atlasDeployment.Credentials().Name},
-		r.Log)
+	sdkClientSet, _, err := r.AtlasProvider.SdkClientSet(ctx.Context, &client.ObjectKey{Namespace: atlasDeployment.Namespace, Name: atlasDeployment.Credentials().Name}, r.Log, atlasDeployment)
 	if err != nil {
 		return nil, err
 	}
@@ -219,11 +212,7 @@ func (r *AtlasDeploymentReconciler) getProjectFromAtlas(ctx *workflow.Context, a
 	}
 
 	// Need to still set old client for component not yet migrated
-	ctx.Client, _, err = r.AtlasProvider.Client(
-		ctx.Context,
-		&client.ObjectKey{Namespace: atlasDeployment.Namespace, Name: atlasDeployment.Credentials().Name},
-		r.Log,
-	)
+	ctx.Client, _, err = r.AtlasProvider.Client(ctx.Context, &client.ObjectKey{Namespace: atlasDeployment.Namespace, Name: atlasDeployment.Credentials().Name}, r.Log, atlasDeployment)
 	if err != nil {
 		return nil, err
 	}
@@ -242,18 +231,18 @@ func (r *AtlasDeploymentReconciler) getProjectFromKube(ctx *workflow.Context, at
 		return nil, err
 	}
 
-	sdkClient, orgID, err := r.AtlasProvider.SdkClient(ctx.Context, credentialsSecret, r.Log)
+	sdkClient, orgID, err := r.AtlasProvider.SdkClient(ctx.Context, credentialsSecret, r.Log, atlasDeployment)
 	if err != nil {
 		return nil, err
 	}
 
-	sdkClientSet, _, err := r.AtlasProvider.SdkClientSet(ctx.Context, credentialsSecret, r.Log)
+	sdkClientSet, _, err := r.AtlasProvider.SdkClientSet(ctx.Context, credentialsSecret, r.Log, atlasDeployment)
 	if err != nil {
 		return nil, err
 	}
 
 	// Need to still set old client for component not yet migrated
-	ctx.Client, _, err = r.AtlasProvider.Client(ctx.Context, credentialsSecret, r.Log)
+	ctx.Client, _, err = r.AtlasProvider.Client(ctx.Context, credentialsSecret, r.Log, atlasDeployment)
 	if err != nil {
 		return nil, err
 	}

@@ -2,20 +2,24 @@ package atlas
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"runtime"
 	"strings"
 
-	"go.mongodb.org/atlas-sdk/v20231115008/admin"
-	//v20241113001
+	"github.com/mongodb-forks/digest"
+	adminv20231115008 "go.mongodb.org/atlas-sdk/v20231115008/admin"
 	adminv20241113001 "go.mongodb.org/atlas-sdk/v20241113001/admin"
 	"go.mongodb.org/atlas/mongodbatlas"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
+	apiruntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/dryrun"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/internal/httputil"
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api"
 	akov2 "github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api/v1"
@@ -30,15 +34,15 @@ const (
 )
 
 type Provider interface {
-	Client(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger) (*mongodbatlas.Client, string, error)
-	SdkClient(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger) (*admin.APIClient, string, error)
-	SdkClientSet(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger) (*ClientSet, string, error)
+	Client(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger, obj apiruntime.Object) (*mongodbatlas.Client, string, error)
+	SdkClient(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger, obj apiruntime.Object) (*adminv20231115008.APIClient, string, error)
+	SdkClientSet(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger, obj apiruntime.Object) (*ClientSet, string, error)
 	IsCloudGov() bool
 	IsResourceSupported(resource api.AtlasCustomResource) bool
 }
 
 type ClientSet struct {
-	//SdkClient20231115008 *admin.APIClient
+	SdkClient20231115008 *adminv20231115008.APIClient
 	SdkClient20241113001 *adminv20241113001.APIClient
 }
 
@@ -46,6 +50,7 @@ type ProductionProvider struct {
 	k8sClient       client.Client
 	domain          string
 	globalSecretRef client.ObjectKey
+	dryRunRecorder  record.EventRecorder
 }
 
 type credentialsSecret struct {
@@ -54,11 +59,12 @@ type credentialsSecret struct {
 	PrivateKey string
 }
 
-func NewProductionProvider(atlasDomain string, globalSecretRef client.ObjectKey, k8sClient client.Client) *ProductionProvider {
+func NewProductionProvider(atlasDomain string, globalSecretRef client.ObjectKey, k8sClient client.Client, dryRunRecorder record.EventRecorder) *ProductionProvider {
 	return &ProductionProvider{
 		k8sClient:       k8sClient,
 		domain:          atlasDomain,
 		globalSecretRef: globalSecretRef,
+		dryRunRecorder:  dryRunRecorder,
 	}
 }
 
@@ -101,7 +107,7 @@ func (p *ProductionProvider) IsResourceSupported(resource api.AtlasCustomResourc
 	return false
 }
 
-func (p *ProductionProvider) Client(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger) (*mongodbatlas.Client, string, error) {
+func (p *ProductionProvider) Client(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger, obj apiruntime.Object) (*mongodbatlas.Client, string, error) {
 	secretData, err := getSecrets(ctx, p.k8sClient, secretRef, &p.globalSecretRef)
 	if err != nil {
 		return nil, "", err
@@ -111,7 +117,13 @@ func (p *ProductionProvider) Client(ctx context.Context, secretRef *client.Objec
 		httputil.Digest(secretData.PublicKey, secretData.PrivateKey),
 		httputil.LoggingTransport(log),
 	}
-	httpClient, err := httputil.DecorateClient(&http.Client{Transport: http.DefaultTransport}, clientCfg...)
+
+	transport, err := p.newDryRunTransport(obj, http.DefaultTransport)
+	if err != nil {
+		return nil, "", err
+	}
+
+	httpClient, err := httputil.DecorateClient(&http.Client{Transport: transport}, clientCfg...)
 	if err != nil {
 		return nil, "", err
 	}
@@ -121,46 +133,64 @@ func (p *ProductionProvider) Client(ctx context.Context, secretRef *client.Objec
 	return c, secretData.OrgID, err
 }
 
-func (p *ProductionProvider) SdkClient(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger) (*admin.APIClient, string, error) {
-	secretData, err := getSecrets(ctx, p.k8sClient, secretRef, &p.globalSecretRef)
+func (p *ProductionProvider) SdkClient(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger, obj apiruntime.Object) (*adminv20231115008.APIClient, string, error) {
+	clientSet, orgID, err := p.SdkClientSet(ctx, secretRef, log, obj)
 	if err != nil {
 		return nil, "", err
 	}
 
-	// TODO review we need add a custom logger to http client
-	//httpClientWithCustomLogger := http.DefaultClient
-	//err = httputil.LoggingTransport(log)(http.DefaultClient)
-	//if err != nil {
-	//	return nil, "", err
-	//}
-
-	c, err := NewClient(p.domain, secretData.PublicKey, secretData.PrivateKey)
-	if err != nil {
-		return nil, "", err
-	}
-
-	return c, secretData.OrgID, nil
+	// Special case: SdkClient only returns the v20231115008 client.
+	// TODO: remove SdkClient for good in favor of SdkClientSet
+	return clientSet.SdkClient20231115008, orgID, nil
 }
 
-func (p *ProductionProvider) SdkClientSet(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger) (*ClientSet, string, error) {
+func (p *ProductionProvider) SdkClientSet(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger, obj apiruntime.Object) (*ClientSet, string, error) {
 	secretData, err := getSecrets(ctx, p.k8sClient, secretRef, &p.globalSecretRef)
 	if err != nil {
 		return nil, "", err
 	}
 
-	// Instead of constantly extending the interface above, consider grouping all SDK Clients here
-	// New SDK (v20241113001) SDK
-	c2024, err := adminv20241113001.NewClient(
+	transport, err := p.newDryRunTransport(obj, digest.NewTransport(secretData.PublicKey, secretData.PrivateKey))
+	if err != nil {
+		return nil, "", err
+	}
+
+	httpClient := &http.Client{
+		Transport: transport,
+	}
+
+	clientv20231115008, err := adminv20231115008.NewClient(
+		adminv20231115008.UseBaseURL(p.domain),
+		adminv20231115008.UseHTTPClient(httpClient),
+		adminv20231115008.UseUserAgent(operatorUserAgent()))
+	if err != nil {
+		return nil, "", err
+	}
+
+	clientv20241113001, err := adminv20241113001.NewClient(
 		adminv20241113001.UseBaseURL(p.domain),
-		adminv20241113001.UseDigestAuth(secretData.PublicKey, secretData.PrivateKey),
+		adminv20241113001.UseHTTPClient(httpClient),
 		adminv20241113001.UseUserAgent(operatorUserAgent()))
 	if err != nil {
 		return nil, "", err
 	}
 
 	return &ClientSet{
-		SdkClient20241113001: c2024,
+		SdkClient20231115008: clientv20231115008,
+		SdkClient20241113001: clientv20241113001,
 	}, secretData.OrgID, nil
+}
+
+func (p *ProductionProvider) newDryRunTransport(obj apiruntime.Object, delegate http.RoundTripper) (http.RoundTripper, error) {
+	if p.dryRunRecorder == nil {
+		return delegate, nil
+	}
+
+	if obj == nil {
+		return nil, errors.New("runtime object is required for dry-run")
+	}
+
+	return dryrun.NewDryRunTransport(obj, p.dryRunRecorder, delegate), nil
 }
 
 func getSecrets(ctx context.Context, k8sClient client.Client, secretRef, fallbackRef *client.ObjectKey) (*credentialsSecret, error) {

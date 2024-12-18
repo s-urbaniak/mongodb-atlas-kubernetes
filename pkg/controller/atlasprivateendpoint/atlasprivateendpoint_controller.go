@@ -115,11 +115,7 @@ func (r *AtlasPrivateEndpointReconciler) ensureCustomResource(ctx context.Contex
 }
 
 func (r *AtlasPrivateEndpointReconciler) getProjectFromAtlas(ctx context.Context, akoPrivateEndpoint *akov2.AtlasPrivateEndpoint) (*project.Project, error) {
-	sdkClient, _, err := r.AtlasProvider.SdkClient(
-		ctx,
-		&client.ObjectKey{Namespace: akoPrivateEndpoint.Namespace, Name: akoPrivateEndpoint.Credentials().Name},
-		r.Log,
-	)
+	sdkClient, _, err := r.AtlasProvider.SdkClient(ctx, &client.ObjectKey{Namespace: akoPrivateEndpoint.Namespace, Name: akoPrivateEndpoint.Credentials().Name}, r.Log, akoPrivateEndpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Atlas SDK client: %w", err)
 	}
@@ -146,7 +142,7 @@ func (r *AtlasPrivateEndpointReconciler) getProjectFromKube(ctx context.Context,
 		return nil, fmt.Errorf("failed to compute secret: %w", err)
 	}
 
-	sdkClient, orgID, err := r.AtlasProvider.SdkClient(ctx, credentialsSecret, r.Log)
+	sdkClient, orgID, err := r.AtlasProvider.SdkClient(ctx, credentialsSecret, r.Log, akoPrivateEndpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Atlas SDK client: %w", err)
 	}

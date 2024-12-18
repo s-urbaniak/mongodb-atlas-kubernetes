@@ -3,14 +3,13 @@ package atlas
 import (
 	"context"
 
-	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/atlas"
-
 	"go.mongodb.org/atlas-sdk/v20231115008/admin"
 	"go.mongodb.org/atlas/mongodbatlas"
 	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/api"
+	"github.com/mongodb/mongodb-atlas-kubernetes/v2/pkg/controller/atlas"
 )
 
 type TestProvider struct {
@@ -21,7 +20,7 @@ type TestProvider struct {
 	IsSupportedFunc  func() bool
 }
 
-func (f *TestProvider) Client(_ context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger) (*mongodbatlas.Client, string, error) {
+func (f *TestProvider) Client(ctx context.Context, secretRef *client.ObjectKey, log *zap.SugaredLogger, obj runtime.Object) (*mongodbatlas.Client, string, error) {
 	return f.ClientFunc(secretRef, log)
 }
 
