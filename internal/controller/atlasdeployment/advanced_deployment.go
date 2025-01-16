@@ -36,6 +36,8 @@ func (r *AtlasDeploymentReconciler) handleAdvancedDeployment(ctx *workflow.Conte
 		deploymentInAtlas = newDeployment.(*deployment.Cluster)
 	}
 
+	_, deprecationMsg := deploymentInAKO.Deprecated()
+
 	switch deploymentInAtlas.GetState() {
 	case status.StateIDLE:
 		if changes, occurred := deployment.ComputeChanges(deploymentInAKO, deploymentInAtlas); occurred {
@@ -103,7 +105,7 @@ func (r *AtlasDeploymentReconciler) handleAdvancedDeployment(ctx *workflow.Conte
 			return r.terminate(ctx, workflow.Internal, err)
 		}
 
-		return r.ready(ctx, deploymentInAKO.GetCustomResource(), deploymentInAtlas, "")
+		return r.ready(ctx, deploymentInAKO.GetCustomResource(), deploymentInAtlas, deprecationMsg)
 	case status.StateCREATING:
 		return r.inProgress(ctx, deploymentInAKO.GetCustomResource(), deploymentInAtlas, workflow.DeploymentCreating, "deployment is provisioning")
 	case status.StateUPDATING, status.StateREPAIRING:
