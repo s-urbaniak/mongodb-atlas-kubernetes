@@ -144,7 +144,7 @@ func (s *Serverless) IsServerless() bool {
 	return true
 }
 
-func (c *Serverless) Deprecated() (bool, string) {
+func (s *Serverless) Deprecated() (bool, string) {
 	return true, "WARNING: serverless is deprecated"
 }
 

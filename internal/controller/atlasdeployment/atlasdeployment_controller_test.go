@@ -1276,7 +1276,7 @@ func TestChangeDeploymentType(t *testing.T) {
 					Log:    logger.Sugar(),
 				},
 				AtlasProvider: atlasProvider,
-				EventRecorder: record.NewFakeRecorder(1),
+				EventRecorder: record.NewFakeRecorder(10),
 			}
 			result, err := r.Reconcile(
 				ctx,
