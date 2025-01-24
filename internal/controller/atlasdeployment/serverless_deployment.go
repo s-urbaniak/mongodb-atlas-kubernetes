@@ -25,8 +25,6 @@ func (r *AtlasDeploymentReconciler) handleServerlessInstance(ctx *workflow.Conte
 		deploymentInAtlas = newServerlessDeployment.(*deployment.Serverless)
 	}
 
-	_, deprecationMsg := deploymentInAKO.Deprecated()
-
 	switch deploymentInAtlas.GetState() {
 	case status.StateIDLE:
 		if !reflect.DeepEqual(deploymentInAKO.ServerlessSpec, deploymentInAtlas.ServerlessSpec) {
@@ -58,7 +56,7 @@ func (r *AtlasDeploymentReconciler) handleServerlessInstance(ctx *workflow.Conte
 			return r.terminate(ctx, workflow.Internal, err)
 		}
 
-		return r.ready(ctx, deploymentInAKO.GetCustomResource(), deploymentInAtlas, deprecationMsg)
+		return r.ready(ctx, deploymentInAKO, deploymentInAtlas)
 
 	case status.StateCREATING:
 		return r.inProgress(ctx, deploymentInAKO.GetCustomResource(), deploymentInAtlas, workflow.DeploymentCreating, "deployment is provisioning")
