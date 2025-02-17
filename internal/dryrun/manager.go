@@ -56,32 +56,18 @@ func (t *terminationAwareReconciler) Reconcile(ctx context.Context, req ctrl.Req
 // but executing dry-run functionality.
 type Manager struct {
 	cluster.Cluster
-	reconcilers []Reconciler
-	logger      *zap.Logger
-	instanceUID string
-	eventClient corev1client.EventsGetter
+	reconcilers  []Reconciler
+	logger       *zap.Logger
+	instanceUID  string
+	eventsClient corev1client.EventsGetter
 }
 
-func NewManager(c cluster.Cluster, logger *zap.Logger) (*Manager, error) {
-	// We cannot use cluster.Cluster's event recorder. This event recorder has no guarantees about the delivery of events to API server.
-	// Internally a cluster.Cluster.GetEventRecorderFor("foo").Event(...) enqueues an event and dequeues it in separate goroutines.
-	// There the creation of events is not acknowledged to the consumer and thus is best-efforts only.
-	//
-	// While this queueing/dequeuing mechanism makes sense for an operator running multiple reconcilers concurrently,
-	// its loose guarantees are not sufficient for the dry-run case as we must ensure events are created in API-server.
-	//
-	// Hence, we are using a native typed core client-go client to create events like any other regular resource.
-	// We cannot use c.Cluster.GetClient() as that client is initialized with the dry-run option which would never emit events.
-	corev1Client, err := corev1client.NewForConfigAndClient(c.GetConfig(), c.GetHTTPClient())
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize event client: %w", err)
-	}
-
+func NewManager(c cluster.Cluster, eventsClient corev1client.EventsGetter, logger *zap.Logger) (*Manager, error) {
 	mgr := &Manager{
-		Cluster:     c,
-		logger:      logger.Named("dry-run-manager"),
-		instanceUID: uuid.New().String(),
-		eventClient: corev1Client,
+		Cluster:      c,
+		logger:       logger.Named("dry-run-manager"),
+		instanceUID:  uuid.New().String(),
+		eventsClient: eventsClient,
 	}
 	return mgr, nil
 }
@@ -91,7 +77,7 @@ func (m *Manager) SetupReconciler(r Reconciler) {
 }
 
 //nolint:unparam
-func (m *Manager) eventf(ctx context.Context, object runtime.Object, eventtype, reason, messageFmt string, args ...interface{}) error {
+func (m *Manager) eventf(ctx context.Context, object runtime.Object, eventType, reason, messageFmt string, args ...interface{}) error {
 	ref, err := reference.GetReference(m.Cluster.GetScheme(), object)
 	if err != nil {
 		return fmt.Errorf("unable to get reference from object: %w", err)
@@ -119,14 +105,14 @@ func (m *Manager) eventf(ctx context.Context, object runtime.Object, eventtype, 
 		FirstTimestamp:      t,
 		LastTimestamp:       t,
 		Count:               1,
-		Type:                eventtype,
+		Type:                eventType,
 		ReportingController: dryRunComponent,
 		Source: corev1.EventSource{
 			Component: dryRunComponent,
 		},
 	}
 
-	_, err = m.eventClient.Events(ev.GetNamespace()).Create(ctx, ev, metav1.CreateOptions{})
+	_, err = m.eventsClient.Events(ev.GetNamespace()).Create(ctx, ev, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to create event: %w", err)
 	}
@@ -139,7 +125,7 @@ func (m *Manager) executeDryRun(ctx context.Context) error {
 		return err
 	}
 
-	if err := m.eventf(ctx, m.object(), corev1.EventTypeNormal, DryRunReason, "finished"); err != nil {
+	if err := m.eventf(ctx, m.object(), corev1.EventTypeNormal, DryRunReason, DryRunFinishedMsg); err != nil {
 		return err
 	}
 

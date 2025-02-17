@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -211,7 +212,21 @@ func (b *Builder) Build(ctx context.Context) (cluster.Cluster, error) {
 			b.atlasProvider = atlas.NewProductionProvider(b.atlasDomain, b.apiSecret, c.GetClient(), true)
 		}
 
-		mgr, err := dryrun.NewManager(c, b.logger)
+		// We cannot use cluster.Cluster's event recorder. This event recorder has no guarantees about the delivery of events to API server.
+		// Internally a cluster.Cluster.GetEventRecorderFor("foo").Event(...) enqueues an event and dequeues it in separate goroutines.
+		// There the creation of events is not acknowledged to the consumer and thus is best-efforts only.
+		//
+		// While this queueing/dequeuing mechanism makes sense for an operator running multiple reconcilers concurrently,
+		// its loose guarantees are not sufficient for the dry-run case as we must ensure events are created in API-server.
+		//
+		// Hence, we are using a native typed core client-go client to create events like any other regular resource.
+		// We cannot use c.Cluster.GetClient() as that client is initialized with the dry-run option which would never emit events.
+		corev1Client, err := corev1client.NewForConfigAndClient(c.GetConfig(), c.GetHTTPClient())
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize event client: %w", err)
+		}
+
+		mgr, err := dryrun.NewManager(c, corev1Client, b.logger)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create dry-run manager: %w", err)
 		}
